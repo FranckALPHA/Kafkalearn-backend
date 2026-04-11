@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+.cache/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environnements virtuels
+venv/
+.venv/
+env/
+ENV/
+bin/
+lib/
+include/
+share/
+
+# Données et Logs
+data/
+.cache/
+*.log
+server.log
+server_restart.log
+*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environnement
+.env
+secret.py
+
+# Secrets / keys
+keys/
+*firebase*adminsdk*.json
+*firebase-service-account*.json
+
+# Docker (si nécessaire d'ignorer les volumes locaux persistés hors du dossier data)
+# Vespa artefacts
+app_package.zip
+
+# Docs binaries
+docs/*.pdf
+docs/*.jpg
+docs/*.jpeg
+docs/*.png
+docs/*.mhtml
+docs/*.mp4

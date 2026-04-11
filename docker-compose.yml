@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: kafkalearn_redis
+    restart: always
+    ports:
+      - "16379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redisdata:/data
+
+  # 🐘 Base de données métier
+  db:
+    image: ankane/pgvector:latest
+    container_name: kafkalearn_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: kafkalearn_db
+      POSTGRES_USER: kafkalearn_user
+      POSTGRES_PASSWORD: kafkalearn_password
+    ports:
+      - "15432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # 🚀 Vespa (Moteur vectoriel)
+  vespa:
+    image: vespaengine/vespa:latest
+    container_name: kafkalearn_vespa
+    restart: always
+    ports:
+      - "18080:8080"
+      - "19071:19071"
+      - "19092:19092"
+    volumes:
+      - vespadata:/opt/vespa/var
+
+  # 🔍 MeiliSearch (Recherche textuelle)
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    container_name: kafkalearn_meilisearch
+    restart: always
+    environment:
+      - MEILI_MASTER_KEY=kafkalearn_master_key
+    ports:
+      - "17700:7700"
+    volumes:
+      - meilidata:/meili_data
+
+  # 🔄 Celery Worker (tâches par défaut)
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kafkalearn_celery_worker
+    restart: always
+    command: celery -A app.modules.users.jobs.celery_app:celery_app worker -Q default -l info
+    environment:
+      - DATABASE_URL=postgresql://kafkalearn_user:kafkalearn_password@db:5432/kafkalearn_db
+      - REDIS_URL=redis://redis:6379/0
+      - VESPA_URL=http://vespa:8080
+      - MEILI_URL=http://meilisearch:7700
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+
+  # 🔄 Celery Worker (tâches lourdes : LLM, PDF)
+  celery-worker-heavy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kafkalearn_celery_heavy
+    restart: always
+    command: celery -A app.modules.users.jobs.celery_app:celery_app worker -Q heavy,llm -l info --concurrency=2
+    environment:
+      - DATABASE_URL=postgresql://kafkalearn_user:kafkalearn_password@db:5432/kafkalearn_db
+      - REDIS_URL=redis://redis:6379/0
+      - VESPA_URL=http://vespa:8080
+      - MEILI_URL=http://meilisearch:7700
+      - LLM_PROVIDER=${LLM_PROVIDER:-mistral}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+
+  # 🔄 Celery Worker (emails)
+  celery-worker-emails:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kafkalearn_celery_emails
+    restart: always
+    command: celery -A app.modules.users.jobs.celery_app:celery_app worker -Q emails -l info
+    environment:
+      - DATABASE_URL=postgresql://kafkalearn_user:kafkalearn_password@db:5432/kafkalearn_db
+      - REDIS_URL=redis://redis:6379/0
+      - MAIL_HOST=${MAIL_HOST:-smtp.gmail.com}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - BREVO_API_KEY=${BREVO_API_KEY:-}
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+
+  # ⏰ Celery Beat (planification)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kafkalearn_celery_beat
+    restart: always
+    command: celery -A app.modules.users.jobs.celery_app:celery_app beat -l info
+    environment:
+      - DATABASE_URL=postgresql://kafkalearn_user:kafkalearn_password@db:5432/kafkalearn_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+
+volumes:
+  pgdata:
+  vespadata:
+  meilidata:
+  redisdata:

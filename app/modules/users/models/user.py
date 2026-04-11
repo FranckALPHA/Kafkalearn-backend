@@ -31,8 +31,10 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
 
     # ─── Profil scolaire ─────────────────────────────────────────
     langue = Column(
-        String(5), nullable=False, default="fr",
-        CheckConstraint("langue IN ('fr', 'en')")
+        String(5),
+        CheckConstraint("langue IN ('fr', 'en')"),
+        nullable=False,
+        default="fr"
     )
     classe = Column(String(50), nullable=True, index=True)
     serie = Column(String(20), nullable=True, index=True)
@@ -45,16 +47,20 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
 
     # ─── Plans & accès ───────────────────────────────────────────
     plan_base = Column(
-        String(20), default="freemium", nullable=False,
+        String(20),
         CheckConstraint(
             "plan_base IN ('freemium','access','premium','pro','unlimited','school')"
-        )
+        ),
+        default="freemium",
+        nullable=False
     )
     plan_effectif = Column(
-        String(20), default="freemium", nullable=False,
+        String(20),
         CheckConstraint(
             "plan_effectif IN ('freemium','access','premium','pro','unlimited','school')"
-        )
+        ),
+        default="freemium",
+        nullable=False
     )
     plan_expiration_at = Column(TIMESTAMP, nullable=True, index=True)
     school_id = Column(UUID(as_uuid=True), ForeignKey("schools.id"), nullable=True)
@@ -64,22 +70,23 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     referred_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
     # ─── Engagement & scoring ────────────────────────────────────
-    streak_jours = Column(Integer, default=0, CheckConstraint("streak_jours >= 0"))
-    streak_max = Column(Integer, default=0, CheckConstraint("streak_max >= 0"))
+    streak_jours = Column(Integer, CheckConstraint("streak_jours >= 0"), default=0)
+    streak_max = Column(Integer, CheckConstraint("streak_max >= 0"), default=0)
     derniere_connexion_at = Column(TIMESTAMP, nullable=True, index=True)
     derniere_activite_at = Column(TIMESTAMP, nullable=True, index=True)
 
     onboarding_completed = Column(Boolean, default=False)
     niveau_estime = Column(
         String(10),
-        CheckConstraint("niveau_estime IN ('faible','moyen','fort')")
+        CheckConstraint("niveau_estime IN ('faible','moyen','fort')"),
     )
     matiere_forte = Column(String(100))
     matiere_faible = Column(String(100))
 
     score_global = Column(
-        Float, default=0.0,
-        CheckConstraint("score_global BETWEEN 0 AND 100")
+        Float,
+        CheckConstraint("score_global BETWEEN 0 AND 100"),
+        default=0.0
     )
     progression_hebdo = Column(Float, default=0.0)
 
@@ -93,8 +100,9 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     current_session_id = Column(String(36), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     role = Column(
-        String(20), default="student",
-        CheckConstraint("role IN ('student','admin','superadmin')")
+        String(20),
+        CheckConstraint("role IN ('student','admin','superadmin')"),
+        default="student"
     )
 
     # ─── Relations ORM ───────────────────────────────────────────
@@ -111,6 +119,9 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     roles = relationship(
         "Role", secondary="user_roles", back_populates="users", lazy="selectin"
     )
+    documents = relationship("Document", back_populates="user", lazy="dynamic")
+    playlists = relationship("Playlist", back_populates="user", lazy="dynamic")
+    document_views = relationship("DocumentView", back_populates="user", lazy="dynamic")
 
     # ─── Index composites ────────────────────────────────────────
     __table_args__ = (

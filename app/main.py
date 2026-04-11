@@ -36,9 +36,13 @@ app.add_middleware(
 # ─── Routers ─────────────────────────────────────────────────────
 from app.modules.users.router import router as users_router
 from app.modules.search.router import router as search_router
+from app.modules.skills.router import router as skills_router
+from app.modules.epreuves.router import router as epreuves_router
 
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(search_router, prefix="/api/v1")
+app.include_router(skills_router, prefix="/api/v1")
+app.include_router(epreuves_router, prefix="/api/v1")
 
 
 # ─── Routes ──────────────────────────────────────────────────────
@@ -49,7 +53,7 @@ async def accueil():
     <head><title>KafkaLearn Backend</title></head>
     <body>
         <h1>KafkaLearn Backend v{APP_VERSION}</h1>
-        <p>Modules actifs : Users, Search</p>
+        <p>Modules actifs : Users, Search, Skills, Epreuves</p>
         <p><a href="/docs">Documentation Swagger UI</a></p>
     </body>
     </html>

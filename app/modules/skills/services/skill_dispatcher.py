@@ -3,32 +3,40 @@ services/skill_dispatcher.py
 ============================
 Détection d'intention + routage vers le skill approprié.
 """
-from .base import BaseService
-from .base_skill import BaseSkill
-from .fiche_skill import FicheSkill
-from .quiz_skill import QuizSkill
-from .solver_skill import SolverSkill
-from .tuteur_skill import TuteurSkill
-from .corrige_skill import CorrigeSkill
-from .epreuve_skill import EpreuveSkill
-from .visualisation_skill import VisualisationSkill
-from utils.constants import PATTERNS_INTENT
-from utils.llm_client import LLMClient
+import logging
 import re
+import time
+from typing import Optional, Tuple
 
-class SkillDispatcher(BaseService):
+from fastapi import HTTPException
+
+from app.modules.skills.services.base import SkillsBaseService
+from app.modules.skills.services.base_skill import BaseSkill
+from app.modules.skills.services.fiche_skill import FicheSkill
+from app.modules.skills.services.quiz_skill import QuizSkill
+from app.modules.skills.services.solver_skill import SolverSkill
+from app.modules.skills.services.tuteur_skill import TuteurSkill
+from app.modules.skills.services.corrige_skill import CorrigeSkill
+from app.modules.skills.services.epreuve_skill import EpreuveSkill
+from app.modules.skills.services.visualisation_skill import VisualisationSkill
+from app.modules.skills.utils.constants import PATTERNS_INTENT
+from app.modules.skills.utils.llm_client import LLMClient
+
+logger = logging.getLogger(__name__)
+
+class SkillDispatcher(SkillsBaseService):
     """
     Détecte l'intention de l'utilisateur et route vers le skill approprié.
     """
-    
+
     SKILL_MAP = {
-        'fiche': FicheSkill,
-        'quiz': QuizSkill,
-        'solver': SolverSkill,
-        'tuteur': TuteurSkill,
-        'corrige': CorrigeSkill,
-        'epreuve': EpreuveSkill,
-        'visualisation': VisualisationSkill
+        "fiche": FicheSkill,
+        "quiz": QuizSkill,
+        "solver": SolverSkill,
+        "tuteur": TuteurSkill,
+        "corrige": CorrigeSkill,
+        "epreuve": EpreuveSkill,
+        "visualisation": VisualisationSkill,
     }
     
     def __init__(self, db, redis=None, llm_client: LLMClient = None):

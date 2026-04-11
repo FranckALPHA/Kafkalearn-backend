@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import Optional, List, Dict, Any
+import time
 import httpx
 import logging
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -120,8 +121,60 @@ class LLMClient:
         tokens = data.get("usageMetadata", {}).get("totalTokenCount", 0)
         
         return {"text": text, "tokens_used": tokens}
-    
-    # _call_mistral et _call_openrouter suivent le même pattern...
-    
+
+    async def _call_mistral(self, messages, temperature, max_tokens, response_format):
+        """Appel API Mistral."""
+        payload = {
+            "model": "mistral-small-latest",
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if response_format == "json":
+            payload["response_format"] = {"type": "json_object"}
+
+        url = self.endpoints[LLMProvider.MISTRAL]
+        response = await self.client.post(
+            url,
+            json=payload,
+            headers={"Authorization": f"Bearer {self.api_keys.get('mistral', '')}"},
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        text = data["choices"][0]["message"]["content"]
+        tokens = data.get("usage", {}).get("total_tokens", 0)
+
+        return {"text": text, "tokens_used": tokens}
+
+    async def _call_openrouter(self, messages, temperature, max_tokens, response_format):
+        """Appel API OpenRouter."""
+        payload = {
+            "model": "meta-llama/llama-3.3-70b-instruct",
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if response_format == "json":
+            payload["response_format"] = {"type": "json_object"}
+
+        url = self.endpoints[LLMProvider.OPENROUTER]
+        response = await self.client.post(
+            url,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {self.api_keys.get('openrouter', '')}",
+                "HTTP-Referer": "https://kafkalearn.app",
+                "X-Title": "KafkaLearn",
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        text = data["choices"][0]["message"]["content"]
+        tokens = data.get("usage", {}).get("total_tokens", 0)
+
+        return {"text": text, "tokens_used": tokens}
+
     async def close(self):
         await self.client.aclose()

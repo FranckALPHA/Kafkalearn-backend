@@ -3,11 +3,16 @@ services/base_skill.py
 ======================
 Classe abstraite commune à tous les skills.
 """
+import logging
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List
+
 from pydantic import BaseModel
-from utils.llm_client import LLMClient
-from modules.search.services.search_orchestrator import SearchOrchestrator
+
+from app.modules.skills.utils.llm_client import LLMClient
+from app.modules.search.services.search_orchestrator import SearchOrchestrator
+
+logger = logging.getLogger(__name__)
 
 class SkillRequest(BaseModel):
     """Requête standardisée pour l'exécution d'un skill."""

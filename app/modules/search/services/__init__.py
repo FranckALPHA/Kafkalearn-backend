@@ -10,6 +10,8 @@ from .gemini_responder_service import GeminiResponderService
 from .search_orchestrator import SearchOrchestrator
 from .search_analytics_service import SearchAnalyticsService
 from .search_suggestion_service import SearchSuggestionService
+from .meilisearch_service import MeilisearchService
+from .filter_cache_service import FilterCacheService
 
 __all__ = [
     "SearchBaseService",
@@ -19,4 +21,6 @@ __all__ = [
     "SearchOrchestrator",
     "SearchAnalyticsService",
     "SearchSuggestionService",
+    "MeilisearchService",
+    "FilterCacheService",
 ]

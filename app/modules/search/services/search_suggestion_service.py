@@ -8,6 +8,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from redis import Redis
 
 from app.modules.search.services.base import SearchBaseService
@@ -26,10 +27,13 @@ class SearchSuggestionService(SearchBaseService):
         Génère des suggestions de recherche personnalisées.
         Utilise le cache Redis 24h.
         """
+        from uuid import UUID
+        user_uuid = UUID(user_id)
+
         # Vérifier le cache
         cache_entry = (
             self.db.query(SearchSuggestionCache)
-            .filter(SearchSuggestionCache.user_id == user_id)
+            .filter(SearchSuggestionCache.user_id == user_uuid)
             .first()
         )
 
@@ -72,10 +76,13 @@ class SearchSuggestionService(SearchBaseService):
         Génère des suggestions basées sur l'historique et les matières fréquentes.
         TODO: Enrichir avec le profil d'apprentissage et l'IA.
         """
+        from uuid import UUID
+        user_uuid = UUID(user_id)
+
         # Recherches populaires de l'utilisateur
         user_top = (
             self.db.query(SearchLog.texte_requete)
-            .filter(SearchLog.user_id == user_id)
+            .filter(SearchLog.user_id == user_uuid)
             .order_by(SearchLog.created_at.desc())
             .limit(5)
             .all()

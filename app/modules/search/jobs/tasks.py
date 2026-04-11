@@ -39,6 +39,48 @@ def enrich_profile_after_search_task(
         db.close()
 
 
+@celery_app.task(name="search.tasks.classify_intent_background", queue="llm", bind=True, max_retries=2)
+def classify_intent_background_task(self, search_log_id: int, texte: str):
+    """
+    Classification approfondie de l'intention via LLM (plus coûteuse).
+    Met à jour search_logs avec le résultat pour analytics.
+    """
+    db = _get_db()
+    try:
+        from app.modules.search.models import SearchLog
+        from app.modules.search.utils.constants import MOTS_INTENTION_EXPLICATION, MOTS_INTENTION_ENTRAINEMENT
+
+        # Classification simple basée sur les mots-clés (version améliorée)
+        texte_lower = texte.lower()
+
+        if any(mot in texte_lower for mot in MOTS_INTENTION_EXPLICATION):
+            intention = "explication"
+            confidence = 0.9
+        elif any(mot in texte_lower for mot in MOTS_INTENTION_ENTRAINEMENT):
+            intention = "entrainement"
+            confidence = 0.9
+        else:
+            intention = "general"
+            confidence = 0.5
+
+        # Mise à jour du log avec la classification
+        log = db.query(SearchLog).get(search_log_id)
+        if log and confidence > 0.7:
+            log.intention_detectee = intention
+            log.methode_detection = "llm_refined"
+            db.commit()
+            logger.info(f"Classified intent for log {search_log_id}: {intention} (confidence={confidence})")
+
+        return {"search_log_id": search_log_id, "intention": intention, "confidence": confidence}
+
+    except Exception as e:
+        logger.error(f"Erreur classify_intent log {search_log_id}: {e}")
+        db.rollback()
+        raise self.retry(exc=e, countdown=120)
+    finally:
+        db.close()
+
+
 @celery_app.task(name="search.tasks.cleanup_old_search_logs", queue="cron")
 def cleanup_old_search_logs(days_to_keep: int = 365):
     """Supprime les search_logs anciens (RGPD)."""

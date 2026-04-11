@@ -6,15 +6,17 @@ Dépendances FastAPI pour le module search.
 from fastapi import Depends, Request, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from functools import wraps
 
 from app.core.database import SessionLocal
 from app.modules.users.utils.security import decode_token
 from app.modules.users.models import User
 from app.modules.users.utils.rate_limiter import RateLimiter
 
-# Rate limiter pour search: 10 req/min
+# Rate limiters pour search
 search_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 search_lite_rate_limiter = RateLimiter(max_requests=20, window_seconds=60)
+suggestion_rate_limiter = RateLimiter(max_requests=5, window_seconds=60)
 
 security = HTTPBearer()
 
@@ -77,3 +79,11 @@ def get_analytics_service(db: Session = Depends(get_db)):
 def get_suggestion_service(db: Session = Depends(get_db)):
     from app.modules.search.services.search_suggestion_service import SearchSuggestionService
     return SearchSuggestionService(db=db)
+
+
+def get_rate_limiter_dependency(limiter: RateLimiter):
+    """Factory pour créer une dépendance FastAPI de rate limiting."""
+    async def rate_limit_dep(request: Request):
+        await limiter(request)
+        return True
+    return rate_limit_dep

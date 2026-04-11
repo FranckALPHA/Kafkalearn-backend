@@ -4,7 +4,7 @@ routes/search.py
 Endpoints principaux de recherche.
 """
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.modules.search.schemas.requests import (
@@ -22,8 +22,11 @@ from app.modules.search.routes.dependencies import (
     get_current_user,
     get_search_orchestrator,
     get_suggestion_service,
+    get_rate_limiter_dependency,
+    search_rate_limiter,
+    search_lite_rate_limiter,
+    suggestion_rate_limiter,
 )
-from app.modules.search.routes.dependencies import search_rate_limiter
 from app.modules.search.models import SearchLog
 from app.modules.users.models import User
 
@@ -32,7 +35,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/search", tags=["Search"])
 
 
-@router.post("/rechercher", response_model=SearchResponse)
+@router.post(
+    "/rechercher",
+    response_model=SearchResponse,
+    dependencies=[Depends(get_rate_limiter_dependency(search_rate_limiter))],
+)
 async def rechercher(
     payload: SearchRequest,
     current_user: User = Depends(get_current_user),
@@ -45,7 +52,11 @@ async def rechercher(
     return await orchestrator.rechercher(user=current_user, payload=payload)
 
 
-@router.get("/suggestions", response_model=SuggestionResponse)
+@router.get(
+    "/suggestions",
+    response_model=SuggestionResponse,
+    dependencies=[Depends(get_rate_limiter_dependency(suggestion_rate_limiter))],
+)
 async def get_suggestions(
     current_user: User = Depends(get_current_user),
     suggestion_service=Depends(get_suggestion_service),
@@ -53,6 +64,7 @@ async def get_suggestions(
     """
     Suggestions de recherche personnalisées basées sur le profil apprenant.
     Résultat mis en cache Redis 24h.
+    Rate limited: 5 req/min.
     """
     return await suggestion_service.generer_suggestions(user_id=str(current_user.id))
 
@@ -120,6 +132,25 @@ async def delete_search_history(
         "message": "Historique de recherche supprimé.",
         "nb_entrees_supprimees": deleted_count,
     }
+
+
+@router.post(
+    "/lite",
+    dependencies=[Depends(get_rate_limiter_dependency(search_lite_rate_limiter))],
+)
+async def recherche_lite(
+    payload: LiteSearchRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Recherche textuelle rapide via Meilisearch (sans IA, sans vectorisation).
+    Pour les cas d'usage simples ou les connexions lentes.
+    Rate limited: 20 req/min.
+    """
+    from app.modules.search.services.meilisearch_service import MeilisearchService
+    service = MeilisearchService(db=db)
+    return await service.search(payload)
 
 
 @router.get("/historique")

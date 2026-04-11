@@ -1,0 +1,26 @@
+{
+  "auth": {
+    "invalid_credentials": "Invalid credentials",
+    "email_not_verified": "Your email address is not verified",
+    "insufficient_permissions": "Plan {required} required for this action",
+    "account_suspended": "Your account is suspended",
+    "rate_limit": "Too many requests. Please try again later.",
+    "token_revoked": "Token revoked"
+  },
+  "document": {
+    "not_found": "Document not found",
+    "upload_failed": "Document upload failed",
+    "duplicate": "This document already exists"
+  },
+  "quota": {
+    "exceeded": "AI quota exceeded for your plan {plan}",
+    "school_exceeded": "School quota exceeded"
+  },
+  "school": {
+    "not_found": "School not found",
+    "not_admin": "Admin access required"
+  },
+  "server": {
+    "error": "Internal server error"
+  }
+}

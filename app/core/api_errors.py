@@ -1,17 +1,8 @@
 """
 app/core/api_errors.py
 ======================
-Exceptions HTTP standardisées.
+Compatibilité — re-export depuis modules/core/api_errors.
 """
-from fastapi import HTTPException
+from app.modules.core.api_errors import api_error
 
-
-def api_error(status_code: int, code: str, message: str = None) -> HTTPException:
-    """Construit une HTTPException standardisée."""
-    return HTTPException(
-        status_code=status_code,
-        detail={
-            "code": code.upper().replace(".", "_"),
-            "message": message or code,
-        },
-    )
+__all__ = ["api_error"]

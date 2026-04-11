@@ -1,22 +1,8 @@
 """
 app/core/database.py
 ====================
-Configuration globale SQLAlchemy (Base et Session).
+Compatibilité — re-export depuis modules/core/database.
 """
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
-from app.core.config import DATABASE_URL
+from app.modules.core.database import engine, SessionLocal, Base, get_db, init_db
 
-Base = declarative_base()
-
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def get_db():
-    """Dépendance FastAPI pour obtenir une session DB."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+__all__ = ["engine", "SessionLocal", "Base", "get_db", "init_db"]

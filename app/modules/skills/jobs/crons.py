@@ -87,7 +87,23 @@ def detect_skill_errors():
 
         if error_count > 20:
             logger.warning(f"ALERT: {error_count} skill errors in the last hour!")
-            # TODO: Envoyer notification admin
+            # Notification admin
+            try:
+                from app.modules.notifications.services.notification_service import NotificationService
+                from app.core.database import SessionLocal
+                from app.modules.users.models import User
+                ndb = SessionLocal()
+                admins = ndb.query(User).filter(User.role.in_(("superadmin", "admin"))).all()
+                for admin in admins:
+                    NotificationService(ndb).send_to_user(
+                        user_id=admin.id,
+                        title="⚠️ Alerte skills — erreurs",
+                        body=f"{error_count} erreurs skills détectées dans la dernière heure",
+                        data={"type": "skill_alert", "module": "skills"},
+                    )
+                ndb.close()
+            except Exception:
+                pass
 
         return {"error_count_1h": error_count, "alert": error_count > 20}
 

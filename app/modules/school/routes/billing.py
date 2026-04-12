@@ -77,10 +77,28 @@ async def renew_school(
     pricing = PricingCalculator()
     montant = pricing.calculer_prix_mensuel(school.nb_eleves_max)
 
-    # TODO: Intégrer avec PaymentService pour initier le paiement NotchPay
+    # Intégration avec PaymentService pour initier le paiement NotchPay
+    try:
+        from app.modules.payment.services.payment_service import PaymentService
+        payment_service = PaymentService(db)
+        payment_result = await payment_service.initier_paiement_ecole(
+            admin_user=current_user,
+            school_id=school.id,
+            nb_sieges=school.nb_eleves_max,
+            callback_url=f"{request.base_url}payment/callback",
+        )
+        return {
+            "message": "Redirection vers le paiement NotchPay",
+            "montant_fcfa": montant,
+            "nb_sieges": school.nb_eleves_max,
+            "authorization_url": payment_result.get("authorization_url"),
+        }
+    except ImportError:
+        # Payment module non disponible
+        pass
+
     return {
         "message": "Renouvellement initié. Redirection vers le paiement.",
         "montant_fcfa": montant,
         "nb_sieges": school.nb_eleves_max,
-        # "authorization_url": payment_result["authorization_url"],  # TODO
     }

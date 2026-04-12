@@ -118,14 +118,18 @@ class RetrieverService(SearchBaseService):
 
     def _vectoriser_texte(self, texte: str) -> List[float]:
         """
-        Vectorisation du texte en embedding.
-        TODO: Remplacer par fastembed ou modèle réel.
-        Placeholder: vecteur dummy de 768 dimensions.
+        Vectorisation du texte en embedding via FastEmbed si disponible.
         """
-        import hashlib
-        # Hash déterministe → vecteur 768D
-        h = hashlib.sha256(texte.encode()).hexdigest()
-        seed = int(h[:8], 16)
-        import random
-        rng = random.Random(seed)
-        return [rng.gauss(0, 1) for _ in range(768)]
+        try:
+            from fastembed import TextEmbedding
+            model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+            embeddings = list(model.embed([texte]))
+            return embeddings[0].tolist()
+        except Exception:
+            # Fallback: vecteur déterministe 768D
+            import hashlib
+            import random
+            h = hashlib.sha256(texte.encode()).hexdigest()
+            seed = int(h[:8], 16)
+            rng = random.Random(seed)
+            return [rng.gauss(0, 1) for _ in range(768)]

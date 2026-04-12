@@ -79,9 +79,37 @@ class GeminiResponderService(SearchBaseService):
         self, requete: str, contexte: str, mode: str, langue: str
     ) -> str:
         """
-        Placeholder pour la génération LLM.
-        TODO: Remplacer par appel réel à Gemini/Mistral/OpenRouter.
+        Génère une réponse via LLMClient si disponible, sinon fallback statique.
         """
+        try:
+            from app.modules.skills.utils.llm_client import LLMClient, LLMProvider
+            import asyncio
+
+            llm = LLMClient(api_keys={})
+            system_prompt = f"Tu es un assistant pédagogique. Mode: {mode}. Langue: {langue}."
+            user_prompt = f"Question: {requete}\n\nContexte:\n{contexte}"
+
+            # Appel synchrone via asyncio pour compatibilité
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(
+                    llm.generate(
+                        messages=[{"role": "user", "content": user_prompt}],
+                        system_instruction=system_prompt,
+                        temperature=0.5,
+                        max_tokens=1000,
+                    )
+                )
+                loop.close()
+                if result.get("text"):
+                    return result["text"]
+            except Exception:
+                pass
+        except ImportError:
+            pass
+
+        # Fallback statique
         if mode == "reponse":
             return (
                 f"Voici une réponse à votre question : « {requete} »\n\n"

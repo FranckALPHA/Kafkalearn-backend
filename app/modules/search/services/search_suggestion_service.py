@@ -74,7 +74,7 @@ class SearchSuggestionService(SearchBaseService):
     async def _generer_suggestions_from_profile(self, user_id: str) -> List[str]:
         """
         Génère des suggestions basées sur l'historique et les matières fréquentes.
-        TODO: Enrichir avec le profil d'apprentissage et l'IA.
+        Enrichi avec le profil d'apprentissage et les lacunes détectées.
         """
         from uuid import UUID
         user_uuid = UUID(user_id)
@@ -99,10 +99,26 @@ class SearchSuggestionService(SearchBaseService):
         )
 
         suggestions = [r[0] for r in user_top]
-        # Ajouter des requêtes populaires non déjà dans la liste
         for r in global_top:
             if r[0] not in suggestions and len(suggestions) < 10:
                 suggestions.append(r[0])
+
+        # Enrichissement via les lacunes du profil utilisateur
+        try:
+            from app.modules.users.models import UserLearningProfile
+            profile = (
+                self.db.query(UserLearningProfile)
+                .filter(UserLearningProfile.user_id == user_uuid)
+                .first()
+            )
+            if profile and profile.lacunes:
+                for matiere, notions in list(profile.lacunes.items())[:2]:
+                    for notion in notions[:1]:
+                        tip = f"Révise les {notion} en {matiere}"
+                        if tip not in suggestions and len(suggestions) < 10:
+                            suggestions.append(tip)
+        except Exception:
+            pass  # Profil non disponible
 
         # Suggestions par défaut si vide
         if not suggestions:

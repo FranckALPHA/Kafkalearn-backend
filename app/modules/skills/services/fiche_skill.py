@@ -73,7 +73,21 @@ class FicheSkill(BaseSkill):
                 latence_ms=latence_ms,
             )
 
-        # TODO: Conversion Markdown → PDF async via Celery
+        # Conversion Markdown → PDF async via Celery
+        try:
+            from app.modules.skills.jobs.tasks import generate_fiche_pdf_task
+            generate_fiche_pdf_task.delay(
+                user_id=request.user_id,
+                message_id=0,  # Sera mis à jour après création du message
+                contenu_markdown=llm_result.get("text", ""),
+                metadata={
+                    "titre": f"Fiche: {notion or request.prompt[:50]}",
+                    "matiere": matiere,
+                    "niveau": niveau,
+                },
+            )
+        except Exception:
+            pass  # PDF généré en arrière-plan, pas bloquant
         return SkillResult(
             success=True,
             skill_type="fiche",

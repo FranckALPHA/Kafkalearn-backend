@@ -151,7 +151,16 @@ class SchoolMemberService(SchoolBaseService):
                     self._add_member(school_id, new_user.id, "csv")
                     stats["ajoutes"] += 1
 
-                    # TODO: queue email invitation via Celery
+                # Envoi email d'invitation en background via Celery
+                try:
+                    from app.modules.school.jobs.tasks import send_school_invitation_email_task
+                    send_school_invitation_email_task.delay(
+                        user_id=new_user.id,
+                        school_name=school.nom,
+                        invitation_code=school.code_invitation,
+                    )
+                except Exception:
+                    pass  # Notification non critique
                     logger.info(
                         "Created invited user %s for school %s", new_user.email, school_id
                     )

@@ -66,8 +66,37 @@ class RerankerService:
     ) -> List[Dict[str, Any]]:
         """
         Enrichit les chunks avec le contexte voisin.
-        TODO: Implémenter avec accès à la DB pour récupérer chunk_idx ± window.
+        Récupère les chunks adjacents (chunk_idx ± window) pour le même document.
         """
-        for chunk in chunks:
-            chunk["contexte_enrichi"] = chunk.get("texte_chunk", "")
-        return chunks
+        try:
+            from app.modules.epreuves.models import DocumentChunk
+
+            enriched = []
+            for chunk in chunks:
+                doc_id = chunk.get("document_id")
+                chunk_idx = chunk.get("chunk_idx")
+                if doc_id is not None and chunk_idx is not None:
+                    # Récupérer chunks voisins
+                    voisins = (
+                        self.db.query(DocumentChunk)
+                        .filter(
+                            DocumentChunk.doc_id == doc_id,
+                            DocumentChunk.chunk_idx.between(
+                                max(0, chunk_idx - window),
+                                chunk_idx + window,
+                            ),
+                        )
+                        .order_by(DocumentChunk.chunk_idx)
+                        .all()
+                    )
+                    contextes = [v.texte_chunk for v in voisins if v.texte_chunk]
+                    chunk["contexte_enrichi"] = "\n\n".join(contextes)
+                else:
+                    chunk["contexte_enrichi"] = chunk.get("texte_chunk", "")
+                enriched.append(chunk)
+            return enriched
+        except Exception as e:
+            logger.warning(f"Context enrichment failed: {e}")
+            for chunk in chunks:
+                chunk["contexte_enrichi"] = chunk.get("texte_chunk", "")
+            return chunks

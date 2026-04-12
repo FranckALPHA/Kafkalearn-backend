@@ -211,13 +211,23 @@ def detect_search_anomalies():
             logger.warning(
                 f"ALERT: {vespa_errors} Vespa errors in the last 30 minutes!"
             )
-            # TODO: Envoyer notification admin
+            # Notification admin
+            _send_admin_alert(
+                "Alerte search — erreurs Vespa",
+                f"{vespa_errors} erreurs Vespa détectées dans les 30 dernières minutes",
+                "vespa",
+            )
 
         if llm_errors > 20:
             logger.warning(
                 f"ALERT: {llm_errors} LLM errors in the last 30 minutes!"
             )
-            # TODO: Envoyer notification admin
+            # Notification admin
+            _send_admin_alert(
+                "Alerte search — erreurs LLM",
+                f"{llm_errors} erreurs LLM détectées dans les 30 dernières minutes",
+                "llm",
+            )
 
         return {
             "window_minutes": 30,
@@ -231,3 +241,23 @@ def detect_search_anomalies():
         raise
     finally:
         db.close()
+
+
+def _send_admin_alert(title: str, body: str, module: str):
+    """Envoie une notification d'alerte aux admins."""
+    try:
+        from app.modules.notifications.services.notification_service import NotificationService
+        from app.core.database import SessionLocal
+        from app.modules.users.models import User
+        ndb = SessionLocal()
+        admins = ndb.query(User).filter(User.role.in_(("superadmin", "admin"))).all()
+        for admin in admins:
+            NotificationService(ndb).send_to_user(
+                user_id=admin.id,
+                title=title,
+                body=body,
+                data={"type": "search_alert", "module": module},
+            )
+        ndb.close()
+    except Exception:
+        pass

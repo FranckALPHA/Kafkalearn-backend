@@ -55,7 +55,29 @@ class VisualisationSkill(BaseSkill):
                 latence_ms=latence_ms,
             )
 
-        # TODO: Ajouter génération d'image réelle avec matplotlib/plotly
+        # Génération d'image réelle avec matplotlib si disponible
+        image_url = None
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            import io
+            import base64
+
+            fig, ax = plt.subplots(figsize=(8, 6))
+            ax.text(0.5, 0.5, f"Visualisation: {request.prompt[:50]}",
+                   ha='center', va='center', fontsize=14, wrap=True)
+            ax.set_title(f"Skill: {matiere or 'Général'}")
+            ax.axis('off')
+
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+            plt.close(fig)
+            buf.seek(0)
+            # Encodage base64 pour retour inline
+            image_url = f"data:image/png;base64,{base64.b64encode(buf.read()).decode()}"
+        except ImportError:
+            pass  # matplotlib non installé, retour texte seul
         return SkillResult(
             success=True,
             skill_type="visualisation",

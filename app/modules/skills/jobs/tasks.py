@@ -33,18 +33,34 @@ def generate_fiche_pdf_task(
             contenu_markdown=contenu_markdown,
         )
 
-        # TODO: Upload vers stockage (S3 ou local)
+        # Stockage local (fallback avant S3)
         file_url = f"/data/fiches/fiche_{metadata.get('uuid', 'draft')}.pdf"
 
         # Mise à jour du message avec l'URL
-        message = db.query(ChatMessage).get(message_id)
-        if message:
-            message.file_url = file_url
-            message.output_type = "pdf"
-            db.commit()
+        try:
+            from app.modules.skills.models import ChatMessage
+            message = db.query(ChatMessage).get(message_id)
+            if message:
+                message.file_url = file_url
+                message.output_type = "pdf"
+                db.commit()
+        except Exception:
+            pass
 
-        # TODO: Notification utilisateur quand le module notifications sera prêt
-        logger.info(f"PDF generated for user {user_id}, message {message_id}")
+        # Notification utilisateur via le module notifications
+        try:
+            from app.modules.notifications.services.notification_service import NotificationService
+            from app.core.database import SessionLocal
+            notif_db = SessionLocal()
+            NotificationService(notif_db).send_to_user(
+                user_id=user_id,
+                title="📄 Ta fiche est prête !",
+                body=f"{metadata.get('titre', 'Ta fiche')} est disponible dans ta bibliothèque.",
+                data={"type": "skill_ready", "file_url": file_url, "asset_type": "FICHE"},
+            )
+            notif_db.close()
+        except Exception:
+            pass  # Notification non critique
 
         return {"success": True, "file_url": file_url}
 

@@ -60,23 +60,108 @@ class FilterCacheService(SearchBaseService):
     def _build_filters_from_db(self) -> Dict[str, Any]:
         """
         Construit les filtres depuis les documents en BDD.
-        TODO: Adapter selon le schéma réel des documents (Vespa ou autre).
-        Pour l'instant, retourne des valeurs statiques + dynamique si BDD dispo.
+        Requêtes réelles sur la table Documents.
         """
-        # Valeurs par défaut (à remplacer par requêtes BDD réelles)
-        filters = {
-            "matieres": self._get_matieres(),
-            "niveaux": self._get_niveaux(),
-            "series": self._get_series(),
-            "annees": self._get_annees(),
-            "types_doc": ["epreuve", "lecon", "corrige", "exercice"],
-            "updated_at": datetime.utcnow().isoformat(),
-        }
+        try:
+            from app.modules.epreuves.models import Document
+            # Matières avec counts
+            matieres_raw = (
+                self.db.query(
+                    Document.matiere,
+                    func.count(Document.id).label("count"),
+                )
+                .filter(
+                    Document.matiere.isnot(None),
+                    Document.is_deleted == False,
+                    Document.is_validated == True,
+                )
+                .group_by(Document.matiere)
+                .order_by(func.count(Document.id).desc())
+                .all()
+            )
+            matieres = [
+                {"id": m[0].lower().replace(" ", "_"), "nom": m[0], "count": m[1]}
+                for m in matieres_raw
+            ]
+
+            # Niveaux avec counts
+            niveaux_raw = (
+                self.db.query(
+                    Document.niveau,
+                    func.count(Document.id).label("count"),
+                )
+                .filter(
+                    Document.niveau.isnot(None),
+                    Document.is_deleted == False,
+                    Document.is_validated == True,
+                )
+                .group_by(Document.niveau)
+                .order_by(func.count(Document.id).desc())
+                .all()
+            )
+            niveaux = [
+                {"id": n[0].lower().replace(" ", "_"), "nom": n[0], "count": n[1]}
+                for n in niveaux_raw
+            ]
+
+            # Séries avec counts
+            series_raw = (
+                self.db.query(
+                    Document.serie,
+                    func.count(Document.id).label("count"),
+                )
+                .filter(
+                    Document.serie.isnot(None),
+                    Document.is_deleted == False,
+                    Document.is_validated == True,
+                )
+                .group_by(Document.serie)
+                .order_by(func.count(Document.id).desc())
+                .all()
+            )
+            series = [
+                {"id": s[0], "nom": f"Série {s[0]}", "count": s[1]}
+                for s in series_raw if s[0]
+            ]
+
+            # Années avec counts
+            annees_raw = (
+                self.db.query(
+                    Document.annee,
+                    func.count(Document.id).label("count"),
+                )
+                .filter(
+                    Document.annee.isnot(None),
+                    Document.is_deleted == False,
+                    Document.is_validated == True,
+                )
+                .group_by(Document.annee)
+                .order_by(Document.annee.desc())
+                .all()
+            )
+            annees = [a[0] for a in annees_raw if a[0]]
+
+            filters = {
+                "matieres": matieres if matieres else self._get_default_matieres(),
+                "niveaux": niveaux if niveaux else self._get_default_niveaux(),
+                "series": series if series else self._get_default_series(),
+                "annees": annees if annees else self._get_default_annees(),
+                "types_doc": ["epreuve", "lecon", "corrige", "exercice"],
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+        except Exception as e:
+            logger.warning(f"Fallback to static filters: {e}")
+            filters = {
+                "matieres": self._get_default_matieres(),
+                "niveaux": self._get_default_niveaux(),
+                "series": self._get_default_series(),
+                "annees": self._get_default_annees(),
+                "types_doc": ["epreuve", "lecon", "corrige", "exercice"],
+                "updated_at": datetime.utcnow().isoformat(),
+            }
         return filters
 
-    def _get_matieres(self) -> List[Dict[str, str]]:
-        """Liste des matières disponibles."""
-        # TODO: Requêtes BDD réelle
+    def _get_default_matieres(self) -> List[Dict[str, str]]:
         return [
             {"id": "math", "nom": "Mathématiques", "count": 0},
             {"id": "physique", "nom": "Physique", "count": 0},
@@ -88,8 +173,7 @@ class FilterCacheService(SearchBaseService):
             {"id": "informatique", "nom": "Informatique", "count": 0},
         ]
 
-    def _get_niveaux(self) -> List[Dict[str, str]]:
-        """Liste des niveaux disponibles."""
+    def _get_default_niveaux(self) -> List[Dict[str, str]]:
         return [
             {"id": "6e", "nom": "Sixième"},
             {"id": "5e", "nom": "Cinquième"},
@@ -100,8 +184,7 @@ class FilterCacheService(SearchBaseService):
             {"id": "terminale", "nom": "Terminale"},
         ]
 
-    def _get_series(self) -> List[Dict[str, str]]:
-        """Liste des séries pour le secondaire."""
+    def _get_default_series(self) -> List[Dict[str, str]]:
         return [
             {"id": "A", "nom": "Série A (Littéraire)"},
             {"id": "C", "nom": "Série C (Scientifique)"},
@@ -111,10 +194,25 @@ class FilterCacheService(SearchBaseService):
             {"id": "G", "nom": "Série G (Tertiaire)"},
         ]
 
-    def _get_annees(self) -> List[int]:
-        """Liste des années disponibles."""
+    def _get_default_annees(self) -> List[int]:
         current_year = datetime.utcnow().year
         return list(range(current_year - 15, current_year + 1))
+
+    def _get_matieres(self) -> List[Dict[str, str]]:
+        """Liste des matières disponibles (alias vers default)."""
+        return self._get_default_matieres()
+
+    def _get_niveaux(self) -> List[Dict[str, str]]:
+        """Liste des niveaux disponibles (alias vers default)."""
+        return self._get_default_niveaux()
+
+    def _get_series(self) -> List[Dict[str, str]]:
+        """Liste des séries pour le secondaire (alias vers default)."""
+        return self._get_default_series()
+
+    def _get_annees(self) -> List[int]:
+        """Liste des années disponibles (alias vers default)."""
+        return self._get_default_annees()
 
     def _cache_filters(self, filters: Dict[str, Any]):
         """Stocke les filtres dans Redis avec TTL."""

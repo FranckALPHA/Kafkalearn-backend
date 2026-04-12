@@ -42,6 +42,7 @@ from app.modules.notifications.router import router as notifications_router
 from app.modules.referral.router import router as referral_router
 from app.modules.payment.router import router as payment_router
 from app.modules.school.router import router as school_router
+from app.modules.calendar.router import router as calendar_router
 
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(search_router, prefix="/api/v1")
@@ -51,6 +52,7 @@ app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(referral_router, prefix="/api/v1")
 app.include_router(payment_router, prefix="/api/v1")
 app.include_router(school_router, prefix="/api/v1")
+app.include_router(calendar_router, prefix="/api/v1")
 
 
 # ─── Routes ──────────────────────────────────────────────────────
@@ -61,7 +63,7 @@ async def accueil():
     <head><title>KafkaLearn Backend</title></head>
     <body>
         <h1>KafkaLearn Backend v{APP_VERSION}</h1>
-        <p>Modules actifs : Users, Search, Skills, Epreuves, Notifications, Referral, Payment, School</p>
+        <p>Modules actifs : Users, Search, Skills, Epreuves, Notifications, Referral, Payment, School, Calendar</p>
         <p><a href="/docs">Documentation Swagger UI</a></p>
     </body>
     </html>

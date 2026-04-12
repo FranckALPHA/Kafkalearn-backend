@@ -1,0 +1,12 @@
+SESSION_STATUSES = ["planned", "active", "paused", "completed", "failed", "skipped", "cancelled"]
+HUMEURS_DEBUT = ["motive", "neutre", "fatigue", "stresse"]
+HUMEURS_FIN = ["satisfait", "neutre", "epuise", "frustre"]
+MIN_SESSION_MINUTES = 5
+MAX_SESSION_MINUTES = 480
+PING_INTERVAL_SECONDS = 30
+MAX_PINGS_PER_MINUTE = 6
+MAX_DELTA_SECONDS = 60
+PAUSE_THRESHOLD_SECONDS = 900
+SESSION_EXPIRY_HOURS = 2
+MIN_SESSION_SECONDS_FOR_STREAK = 300
+STREAK_MILESTONES = [7, 14, 30, 60, 100, 180, 365]

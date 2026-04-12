@@ -48,6 +48,7 @@ from app.modules.memory.router import router as memory_router
 from app.modules.user_documents.router import router as user_documents_router
 from app.modules.doc_analysis.router import router as doc_analysis_router
 from app.modules.wisdom.router import router as wisdom_router
+from app.modules.daily_quiz.router import router as daily_quiz_router
 
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(search_router, prefix="/api/v1")
@@ -63,6 +64,7 @@ app.include_router(memory_router, prefix="/api/v1")
 app.include_router(user_documents_router, prefix="/api/v1")
 app.include_router(doc_analysis_router, prefix="/api/v1")
 app.include_router(wisdom_router, prefix="/api/v1")
+app.include_router(daily_quiz_router, prefix="/api/v1")
 
 
 # ─── Routes ──────────────────────────────────────────────────────
@@ -73,7 +75,7 @@ async def accueil():
     <head><title>KafkaLearn Backend</title></head>
     <body>
         <h1>KafkaLearn Backend v{APP_VERSION}</h1>
-        <p>Modules actifs : Users, Search, Skills, Epreuves, Notifications, Referral, Payment, School, Calendar, Library, Memory, UserDocuments, DocAnalysis, Wisdom</p>
+        <p>Modules actifs : Users, Search, Skills, Epreuves, Notifications, Referral, Payment, School, Calendar, Library, Memory, UserDocuments, DocAnalysis, Wisdom, DailyQuiz</p>
         <p><a href="/docs">Documentation Swagger UI</a></p>
     </body>
     </html>

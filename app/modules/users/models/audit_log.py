@@ -3,7 +3,7 @@ models/audit_log.py
 ===================
 Journal d'audit pour la sécurité et la conformité RGPD.
 """
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Index, JSON, func
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, Index, JSON, TIMESTAMP, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -34,7 +34,7 @@ class AuditLog(Base):
         # info, warning, critical
     )
 
-    created_at = func.now()
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False, index=True)
 
     # Relations
     user = relationship("User", foreign_keys=[user_id], back_populates="audit_logs")

@@ -3,7 +3,7 @@ models/rbac.py
 ==============
 Rôles, permissions et associations pour le contrôle d'accès (RBAC).
 """
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Table, Index, func
+from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, Table, Index, TIMESTAMP, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -16,7 +16,7 @@ user_roles = Table(
     Base.metadata,
     Column("user_id", UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True),
     Column("role_id", Integer, ForeignKey("roles.id"), primary_key=True),
-    Column("granted_at", func.now(), nullable=False),
+    Column("granted_at", TIMESTAMP, server_default=func.now(), nullable=False),
     Column("granted_by_id", UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
 )
 

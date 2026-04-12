@@ -122,6 +122,9 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     documents = relationship("Document", back_populates="user", lazy="dynamic")
     playlists = relationship("Playlist", back_populates="user", lazy="dynamic")
     document_views = relationship("DocumentView", back_populates="user", lazy="dynamic")
+    wisdom_interactions = relationship(
+        "WisdomUserInteraction", back_populates="user", lazy="dynamic"
+    )
 
     # ─── Index composites ────────────────────────────────────────
     __table_args__ = (

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, Integer, TIMESTAMP, DATE, UniqueConstraint, Index, func
+from sqlalchemy import Column, ForeignKey, Integer, TIMESTAMP, DATE, UniqueConstraint, Index, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
@@ -12,7 +12,7 @@ class DailySuggestionsCache(TimestampMixin, Base):
     __tablename__ = "daily_suggestions_cache"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     date_suggestion = Column(DATE, nullable=False)
     suggestions_json = Column(JSONB, nullable=False)
     matieres_du_jour = Column(JSONB, default=list, nullable=False)
@@ -26,7 +26,7 @@ class DailySuggestionsCache(TimestampMixin, Base):
         Index("idx_date_active", "date_suggestion", "generated_at"),
     )
 
-    user = relationship("User", back_populates="suggestions_cache")
+    user = relationship("User")
 
     @property
     def is_expired(self) -> bool:

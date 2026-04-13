@@ -79,7 +79,7 @@ class SearchLog(Base, TimestampMixin):
 
     # ─── Index composites ────────────────────────────────────────
     __table_args__ = (
-        Index("idx_user_created", "user_id", "created_at"),
+        Index("idx_search_user_created", "user_id", "created_at"),
         Index("idx_matiere_intention", "matiere_detectee", "intention_detectee"),
         Index("idx_perf_ia", "reponse_ia_generee", "latence_totale_ms"),
         Index("idx_feedback", "feedback_rating", "created_at"),

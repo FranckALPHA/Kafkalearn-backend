@@ -11,10 +11,6 @@ from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
 from redis import Redis
 
-from app.core.config import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    FRONTEND_URL,
-)
 from app.modules.users.utils.security import (
     hash_password,
     verify_password,
@@ -304,6 +300,109 @@ class UserService(BaseService):
             self._invalidate_profile_cache(str(user_id))
 
         return user.serialize_minimal()
+
+    def demander_reset_mot_de_passe(self, email: str) -> bool:
+        """
+        Demande de reinitialisation de mot de passe.
+        Genere un code OTP et l'envoie par email.
+
+        Args:
+            email: Adresse email de l'utilisateur.
+
+        Returns:
+            True si la demande a ete traitee (meme si l'email n'existe pas,
+            pour des raisons de securite).
+        """
+        user = self.db.query(User).filter(User.email == email).first()
+
+        # Toujours retourner True pour ne pas reveler l'existence d'un compte
+        if not user:
+            logger.info(f"Password reset requested for non-existent email: {email}")
+            return True
+
+        # Generer le code OTP
+        otp_code = generate_otp()
+
+        # Invalider les anciens tokens password_reset non utilises
+        (
+            self.db.query(EmailToken)
+            .filter(
+                EmailToken.user_id == user.id,
+                EmailToken.token_type == "password_reset",
+                EmailToken.used == False,
+            )
+            .update({"used": True})
+        )
+
+        # Creer le nouveau token
+        otp_token = EmailToken(
+            user_id=user.id,
+            token=otp_code,
+            token_type="password_reset",
+            expires_at=datetime.utcnow() + timedelta(minutes=15),
+            used=False,
+        )
+        self.db.add(otp_token)
+        self.db.commit()
+
+        # Envoyer l'email
+        mail_service = MailService(self.db, self.redis)
+        try:
+            mail_service.envoyer_otp(email, user.prenom or "Utilisateur", otp_code, "password_reset")
+        except Exception as e:
+            logger.warning(f"Failed to send password reset email: {e}")
+
+        return True
+
+    def reinitialiser_mot_de_passe(
+        self, email: str, code: str, nouveau_mot_de_passe: str
+    ) -> bool:
+        """
+        Reinitialise le mot de passe d'un utilisateur avec le code OTP.
+
+        Args:
+            email: Adresse email de l'utilisateur.
+            code: Code OTP de verification.
+            nouveau_mot_de_passe: Nouveau mot de passe.
+
+        Returns:
+            True si le mot de passe a ete reinitialise.
+
+        Raises:
+            ValueError: Si l'email, le code ou le token est invalide.
+        """
+        user = self.db.query(User).filter(User.email == email).first()
+        if not user:
+            raise ValueError("USER_NOT_FOUND")
+
+        # Trouver le token password_reset valide
+        otp_token = (
+            self.db.query(EmailToken)
+            .filter(
+                EmailToken.user_id == user.id,
+                EmailToken.token == code,
+                EmailToken.token_type == "password_reset",
+                EmailToken.used == False,
+                EmailToken.expires_at > datetime.utcnow(),
+            )
+            .first()
+        )
+
+        if not otp_token:
+            raise ValueError("INVALID_OR_EXPIRED_OTP")
+
+        # Marquer le token comme utilise
+        otp_token.used = True
+
+        # Changer le mot de passe
+        user.password_hash = hash_password(nouveau_mot_de_passe)
+        user.derniere_activite_at = datetime.utcnow()
+        self.db.commit()
+
+        # Revoquer tous les refresh tokens pour forcer la reconnexion
+        self.logout(str(user.id))
+
+        return True
 
     def changer_mot_de_passe(
         self, user_id: str, old_password: str, new_password: str

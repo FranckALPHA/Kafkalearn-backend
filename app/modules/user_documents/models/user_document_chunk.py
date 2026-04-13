@@ -35,7 +35,7 @@ class UserDocumentChunk(Base, TimestampMixin):
         ),
         UniqueConstraint(
             "document_id", "chunk_idx",
-            name="idx_chunk_unique"
+            name="uq_user_document_chunk_idx"
         ),
         Index("idx_user_chunk", "user_id", "document_id"),
     )

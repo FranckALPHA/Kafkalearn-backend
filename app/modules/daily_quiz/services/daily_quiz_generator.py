@@ -72,29 +72,17 @@ class DailyQuizGeneratorService(DailyQuizBaseService):
         try:
             from app.modules.skills.utils.llm_client import LLMClient, LLMProvider
             from app.core.config import (
-                GEMINI_API_KEY,
-                MISTRAL_API_KEY,
                 OPENROUTER_API_KEYS,
-                LLM_PROVIDER_DEFAULT,
             )
         except ImportError:
             logger.error("Cannot import LLM client or config")
             return []
 
         api_keys = {
-            "gemini": GEMINI_API_KEY,
-            "mistral": MISTRAL_API_KEY,
-            "openrouter": OPENROUTER_API_KEYS[0] if OPENROUTER_API_KEYS else "",
+            "openrouter_api_keys": OPENROUTER_API_KEYS,
         }
 
-        provider_map = {
-            "gemini": LLMProvider.GEMINI,
-            "mistral": LLMProvider.MISTRAL,
-            "openrouter": LLMProvider.OPENROUTER,
-        }
-        default_provider = provider_map.get(LLM_PROVIDER_DEFAULT, LLMProvider.GEMINI)
-
-        client = LLMClient(api_keys, default_provider=default_provider)
+        client = LLMClient(api_keys, default_provider=LLMProvider.OPENROUTER)
 
         prompt = (
             f"Genere 5 questions QCM sur le theme '{theme}' avec une difficulte '{difficulte}' "

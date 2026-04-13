@@ -46,12 +46,12 @@ class Device(Base, TimestampMixin):
     last_seen = Column(TIMESTAMP, default=func.now(), nullable=False, index=True)
 
     __table_args__ = (
-        Index("idx_user_active", "user_id", "is_active"),
+        Index("idx_device_user_active", "user_id", "is_active"),
         Index("idx_platform_langue", "platform", "langue"),
         Index("idx_classe_serie", "classe", "serie"),
     )
 
-    user = relationship("User", back_populates="devices")
+    user = relationship("User")
 
     def serialize_for_topics(self):
         """Return list of FCM topics this device should subscribe to."""

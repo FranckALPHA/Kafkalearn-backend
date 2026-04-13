@@ -28,7 +28,7 @@ class RefreshToken(Base):
     created_at = Column(TIMESTAMP, default=func.now(), nullable=False)
 
     # Relations
-    user = relationship("User", back_populates="refresh_tokens")
+    user = relationship("User")
 
     __table_args__ = (
         Index("idx_refresh_user_active", "user_id", "revoked", "expires_at"),

@@ -43,11 +43,11 @@ class Playlist(Base, TimestampMixin):
         "PlaylistDocument", back_populates="playlist",
         cascade="all, delete-orphan"
     )
-    user = relationship("User", back_populates="playlists")
+    user = relationship("User")
 
     # ─── Index composites ────────────────────────────────────────
     __table_args__ = (
-        Index("idx_user_updated", "user_id", "updated_at"),
+        Index("idx_playlist_user_updated", "user_id", "updated_at"),
         Index("idx_public", "is_public", "created_at"),
     )
 

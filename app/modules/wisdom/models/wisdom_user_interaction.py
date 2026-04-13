@@ -45,8 +45,8 @@ class WisdomUserInteraction(Base, TimestampMixin):
     )
 
     # Relationships
-    user = relationship("User", back_populates="wisdom_interactions")
-    tip = relationship("WisdomTip", back_populates="interactions")
+    user = relationship("User")
+    tip = relationship("WisdomTip")
 
     def __repr__(self) -> str:
         return f"<WisdomUserInteraction user={self.user_id} wisdom={self.wisdom_id}>"

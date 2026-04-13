@@ -19,7 +19,7 @@ class Transaction(Base, TimestampMixin):
     __tablename__ = "transactions"
 
     # ─── Identité ────────────────────────────────────────────────
-    id = Column(String(20), primary_key=True, autoincrement=True)
+    id = Column(String(20), primary_key=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
 
     # ─── Montant & devise ────────────────────────────────────────
@@ -62,7 +62,7 @@ class Transaction(Base, TimestampMixin):
     raw_data = Column(JSONB, default=dict, nullable=True)
 
     # ─── École (plan school) ────────────────────────────────────
-    school_id = Column(UUID(as_uuid=True), ForeignKey("schools.id"), nullable=True)
+    school_id = Column(String(8), ForeignKey("schools.id"), nullable=True)
     nb_sieges = Column(Integer, nullable=True)
 
     # ─── Source du déclencheur ──────────────────────────────────
@@ -83,7 +83,7 @@ class Transaction(Base, TimestampMixin):
     dernier_webhook_at = Column(TIMESTAMP, nullable=True)
 
     # ─── Relations ORM ──────────────────────────────────────────
-    user = relationship("User", back_populates="transactions")
+    user = relationship("User")
     school = relationship("School", back_populates="transactions")
 
     # ─── Index composites ───────────────────────────────────────

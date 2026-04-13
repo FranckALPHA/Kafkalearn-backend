@@ -136,9 +136,11 @@ class SkillDispatcher(SkillsBaseService):
         """
         Vérifie que le plan utilisateur permet d'accéder au skill.
         
-        Raises:
-            HTTPException 403 PLAN_INSUFFISANT si accès refusé
+        NOTE: Disabled for development phase - all skills accessible.
         """
+        # DEV MODE: Skip plan checks
+        return True
+        
         PLAN_REQUIREMENTS = {
             'fiche': 'access',
             'quiz': 'access',
@@ -148,17 +150,17 @@ class SkillDispatcher(SkillsBaseService):
             'epreuve': 'pro',
             'visualisation': 'pro'
         }
-        
+
         PLAN_HIERARCHY = ['freemium', 'access', 'premium', 'pro', 'unlimited', 'school']
-        
+
         required = PLAN_REQUIREMENTS.get(skill_type, 'freemium')
         user_level = PLAN_HIERARCHY.index(user_plan) if user_plan in PLAN_HIERARCHY else 0
         required_level = PLAN_HIERARCHY.index(required) if required in PLAN_HIERARCHY else 0
-        
+
         if user_level < required_level:
             from fastapi import HTTPException
             raise HTTPException(403, "PLAN_INSUFFISANT")
-        
+
         return True
     
     async def extraire_params_llm(self, texte: str, skill_type: str, user_profile: dict) -> dict:

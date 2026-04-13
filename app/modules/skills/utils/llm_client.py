@@ -11,17 +11,44 @@ class LLMProvider(Enum):
     GEMINI = "gemini"
     MISTRAL = "mistral"
     OPENROUTER = "openrouter"
+    OLLAMA = "ollama"
 
 class LLMClient:
     """
     Client LLM unifié avec fallback automatique et gestion des quotas.
     """
-    
-    def __init__(self, api_keys: Dict[str, str], default_provider: LLMProvider = LLMProvider.GEMINI):
-        self.api_keys = api_keys
+
+    def __init__(
+        self,
+        api_keys: Optional[Dict[str, Any]] = None,
+        default_provider: LLMProvider = LLMProvider.OPENROUTER,
+    ):
+        from app.core.config import (
+            OPENROUTER_API_KEYS,
+            OPENROUTER_MODEL,
+            OPENROUTER_MODEL_FALLBACK,
+            OLLAMA_URL,
+            OLLAMA_MODEL,
+        )
+
+        self.api_keys = api_keys or {}
         self.default_provider = default_provider
         self.client = httpx.AsyncClient(timeout=30.0)
-        
+
+        configured_keys = [k for k in OPENROUTER_API_KEYS if k]
+        provided_keys = [k for k in self.api_keys.get("openrouter_api_keys", []) if k]
+        legacy_single = self.api_keys.get("openrouter", "")
+        if legacy_single:
+            provided_keys.insert(0, legacy_single)
+
+        merged_keys = provided_keys + configured_keys
+        # Préserve l'ordre tout en supprimant les doublons
+        self.openrouter_api_keys = list(dict.fromkeys(merged_keys))
+        self.openrouter_model = self.api_keys.get("openrouter_model", OPENROUTER_MODEL)
+        self.openrouter_model_fallback = self.api_keys.get("openrouter_model_fallback", OPENROUTER_MODEL_FALLBACK)
+        self.ollama_url = self.api_keys.get("ollama_url", OLLAMA_URL).rstrip("/")
+        self.ollama_model = self.api_keys.get("ollama_model", OLLAMA_MODEL)
+
         # Endpoints par provider
         self.endpoints = {
             LLMProvider.GEMINI: "https://generativelanguage.googleapis.com/v1beta/models",
@@ -36,12 +63,16 @@ class LLMClient:
     )
     async def generate(
         self,
-        messages: List[Dict[str, str]],
+        messages: Optional[List[Dict[str, str]]] = None,
         system_instruction: Optional[str] = None,
         temperature: float = 0.5,
         max_tokens: int = 2000,
         response_format: Optional[str] = None,  # 'json' pour forcer JSON
-        provider: Optional[LLMProvider] = None
+        provider: Optional[LLMProvider] = None,
+        # Compat legacy
+        prompt: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Génère une réponse via le provider spécifié (ou default).
@@ -56,22 +87,38 @@ class LLMClient:
             }
         """
         provider = provider or self.default_provider
+        if provider != LLMProvider.OPENROUTER:
+            logger.warning("Provider %s non supporte dans ce mode, bascule sur OpenRouter", provider.value)
+            provider = LLMProvider.OPENROUTER
+
+        if isinstance(messages, str):
+            messages = [{"role": "user", "content": messages}]
+
+        if not messages:
+            effective_prompt = user_prompt or prompt
+            if effective_prompt:
+                messages = [{"role": "user", "content": effective_prompt}]
+            else:
+                return {"error_code": "LLM_ERROR", "provider": provider.value}
+
+        if not system_instruction and system_prompt:
+            system_instruction = system_prompt
+
         start_ms = time.time() * 1000
         
         try:
-            if provider == LLMProvider.GEMINI:
-                result = await self._call_gemini(messages, system_instruction, temperature, max_tokens, response_format)
-            elif provider == LLMProvider.MISTRAL:
-                result = await self._call_mistral(messages, temperature, max_tokens, response_format)
-            elif provider == LLMProvider.OPENROUTER:
+            try:
                 result = await self._call_openrouter(messages, temperature, max_tokens, response_format)
-            else:
-                raise ValueError(f"Provider inconnu: {provider}")
+                used_provider = LLMProvider.OPENROUTER.value
+            except Exception as openrouter_exc:
+                logger.warning("OpenRouter indisponible, fallback vers Ollama: %s", openrouter_exc)
+                result = await self._call_ollama(messages, temperature, max_tokens, response_format)
+                used_provider = LLMProvider.OLLAMA.value
             
             latency_ms = int(time.time() * 1000 - start_ms)
             return {
                 **result,
-                "provider": provider.value,
+                "provider": used_provider,
                 "latency_ms": latency_ms,
                 "error_code": None
             }
@@ -149,8 +196,11 @@ class LLMClient:
 
     async def _call_openrouter(self, messages, temperature, max_tokens, response_format):
         """Appel API OpenRouter."""
+        if not self.openrouter_api_keys:
+            raise ValueError("OPENROUTER_API_KEY_1..4 non configurees")
+
         payload = {
-            "model": "meta-llama/llama-3.3-70b-instruct",
+            "model": self.openrouter_model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -159,21 +209,77 @@ class LLMClient:
             payload["response_format"] = {"type": "json_object"}
 
         url = self.endpoints[LLMProvider.OPENROUTER]
-        response = await self.client.post(
-            url,
-            json=payload,
-            headers={
-                "Authorization": f"Bearer {self.api_keys.get('openrouter', '')}",
-                "HTTP-Referer": "https://kafkalearn.app",
-                "X-Title": "KafkaLearn",
+        last_error = None
+        models_to_try = [self.openrouter_model]
+        if self.openrouter_model_fallback and self.openrouter_model_fallback != self.openrouter_model:
+            models_to_try.append(self.openrouter_model_fallback)
+
+        for model in models_to_try:
+            payload["model"] = model
+            for index, key in enumerate(self.openrouter_api_keys, start=1):
+                response = await self.client.post(
+                    url,
+                    json=payload,
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        "HTTP-Referer": "https://kafkalearn.app",
+                        "X-Title": "KafkaLearn",
+                    },
+                )
+
+                if response.status_code < 400:
+                    data = response.json()
+                    text = data["choices"][0]["message"]["content"]
+                    tokens = data.get("usage", {}).get("total_tokens", 0)
+                    return {"text": text, "tokens_used": tokens}
+
+                # Rotation clé sur erreurs d'auth/quota
+                if response.status_code in {401, 402, 403, 429} and index < len(self.openrouter_api_keys):
+                    logger.warning("OpenRouter key #%s en echec (%s), bascule vers la suivante", index, response.status_code)
+                    continue
+
+                # Essayer modèle fallback si modèle principal indisponible
+                if response.status_code in {400, 404} and model != models_to_try[-1]:
+                    logger.warning("Modele OpenRouter '%s' indisponible (%s), tentative fallback", model, response.status_code)
+                    last_error = httpx.HTTPStatusError(
+                        f"Status {response.status_code}", request=response.request, response=response
+                    )
+                    break
+
+                last_error = httpx.HTTPStatusError(
+                    f"Status {response.status_code}", request=response.request, response=response
+                )
+
+            if last_error and getattr(last_error, "response", None) and last_error.response.status_code in {400, 404}:
+                continue
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("Echec OpenRouter: aucune reponse exploitable")
+
+    async def _call_ollama(self, messages, temperature, max_tokens, response_format):
+        """Fallback local via Ollama quand OpenRouter échoue."""
+        payload = {
+            "model": self.ollama_model,
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
             },
-        )
+        }
+        if response_format == "json":
+            payload["format"] = "json"
+
+        response = await self.client.post(f"{self.ollama_url}/api/chat", json=payload)
         response.raise_for_status()
         data = response.json()
 
-        text = data["choices"][0]["message"]["content"]
-        tokens = data.get("usage", {}).get("total_tokens", 0)
+        text = data.get("message", {}).get("content", "")
+        if not text:
+            raise RuntimeError("Ollama a répondu sans contenu exploitable")
 
+        tokens = data.get("eval_count", 0) or 0
         return {"text": text, "tokens_used": tokens}
 
     async def close(self):

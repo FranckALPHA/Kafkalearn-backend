@@ -38,7 +38,7 @@ class NotificationPreference(Base, TimestampMixin):
         Index("idx_pref_user", "user_id"),
     )
 
-    user = relationship("User", back_populates="notification_preferences")
+    user = relationship("User")
 
     def is_quiet_hour(self, check_time=None):
         """Check if the given time falls within quiet hours."""

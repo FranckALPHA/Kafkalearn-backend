@@ -118,6 +118,41 @@ class PasswordResetRequest(BaseModel):
     )
 
 
+class PasswordResetVerifyRequest(BaseModel):
+    """Payload to verify OTP and reset password."""
+
+    email: EmailStr = Field(
+        ...,
+        examples=["eleve@example.com"],
+        description="Adresse e-mail du compte a recuperer.",
+    )
+    code: str = Field(
+        ...,
+        min_length=4,
+        max_length=10,
+        examples=["123456"],
+        description="Code OTP recu par e-mail.",
+    )
+    new_password: str = Field(
+        ...,
+        min_length=8,
+        max_length=128,
+        examples=["NouveauMotDePasse456!"],
+        description="Nouveau mot de passe (8-128 caracteres).",
+    )
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_must_be_strong(cls, v: str) -> str:
+        if not any(c.isupper() for c in v):
+            raise ValueError("Le mot de passe doit contenir au moins une lettre majuscule.")
+        if not any(c.islower() for c in v):
+            raise ValueError("Le mot de passe doit contenir au moins une lettre minuscule.")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Le mot de passe doit contenir au moins un chiffre.")
+        return v
+
+
 class PasswordChangeRequest(BaseModel):
     """Payload to change the password of an authenticated user."""
 

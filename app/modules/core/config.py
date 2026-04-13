@@ -45,14 +45,14 @@ class Settings:
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 
     # ─── LLM Providers ───────────────────────────────────────────
-    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "mistral")
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "openrouter")
 
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
     OPENROUTER_MODEL: str = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct")
-
+    OPENROUTER_MODEL_FALLBACK: str = os.getenv("OPENROUTER_MODEL_FALLBACK", "google/gemma-3-12b")
+    # Compat legacy (non utilises en mode OpenRouter-only)
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
-
     MISTRAL_API_KEY: str = os.getenv("MISTRAL_API_KEY", "")
     MISTRAL_MODEL: str = os.getenv("MISTRAL_MODEL", "mistral-small-latest")
 

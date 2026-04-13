@@ -78,13 +78,14 @@ class Document(Base, TimestampMixin):
     chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
     playlist_items = relationship("PlaylistDocument", back_populates="document", cascade="all, delete-orphan")
     views = relationship("DocumentView", back_populates="document", cascade="all, delete-orphan")
-    user = relationship("User", back_populates="documents")
+    analyses = relationship("DocumentAnalysis", back_populates="document", cascade="all, delete-orphan")
+    user = relationship("User")
 
     # ─── Index composites ────────────────────────────────────────
     __table_args__ = (
         Index("idx_search_main", "matiere", "niveau", "serie", "annee"),
         Index("idx_pipeline", "type_doc", "is_embedded", "ingest_status"),
-        Index("idx_popularity", "nb_vues", "created_at"),
+        Index("idx_document_popularity", "nb_vues", "created_at"),
         Index("idx_validated_matiere", "is_validated", "matiere"),
     )
 

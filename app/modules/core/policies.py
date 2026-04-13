@@ -9,7 +9,12 @@ PLAN_HIERARCHY = ["freemium", "access", "premium", "pro", "unlimited", "school"]
 
 
 def require_plan(user_plan: str, min_plan: str, lang: str = "fr"):
-    """Vérifie que le plan utilisateur est suffisant."""
+    """Vérifie que le plan utilisateur est suffisant.
+    
+    NOTE: Disabled for development phase - all users have full access.
+    """
+    # DEV MODE: Skip plan checks
+    return
     try:
         user_level = PLAN_HIERARCHY.index(user_plan)
         min_level = PLAN_HIERARCHY.index(min_plan)

@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean, TIMESTAMP, TIME, CheckConstraint, Index, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, TIMESTAMP, TIME, CheckConstraint, Index, UniqueConstraint, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -9,7 +10,7 @@ class CalendarTimetable(TimestampMixin, Base):
     __tablename__ = "calendar_timetable"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     subject = Column(String(100), nullable=False, index=True)
     day_of_week = Column(Integer, nullable=False)
     start_time = Column(TIME, nullable=False)
@@ -28,7 +29,7 @@ class CalendarTimetable(TimestampMixin, Base):
         Index("idx_user_day", "user_id", "day_of_week"),
     )
 
-    user = relationship("User", back_populates="timetable_entries")
+    user = relationship("User")
 
     def serialize(self) -> dict:
         return {

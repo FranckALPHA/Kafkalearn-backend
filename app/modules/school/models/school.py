@@ -47,6 +47,7 @@ class School(Base, TimestampMixin):
     admin = relationship("User", foreign_keys=[admin_id])
     members = relationship("SchoolMember", back_populates="school", cascade="all, delete-orphan")
     ai_usage = relationship("SchoolAIUsage", back_populates="school", cascade="all, delete-orphan")
+    transactions = relationship("Transaction", back_populates="school", lazy="dynamic")
 
     __table_args__ = (
         CheckConstraint("nb_eleves_max >= 10", name="ck_nb_eleves_max"),

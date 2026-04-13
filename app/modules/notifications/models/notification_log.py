@@ -33,12 +33,12 @@ class NotificationLog(Base, TimestampMixin):
     opened_at = Column(TIMESTAMP, nullable=True)
 
     __table_args__ = (
-        Index("idx_user_created", "user_id", "created_at"),
+        Index("idx_notification_user_created", "user_id", "created_at"),
         Index("idx_type_read", "type_notif", "is_read"),
         Index("idx_unread_users", "user_id", "is_read", "created_at"),
     )
 
-    user = relationship("User", back_populates="notification_logs")
+    user = relationship("User")
 
     def serialize_for_history(self):
         """Return dict suitable for API response."""

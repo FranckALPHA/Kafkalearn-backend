@@ -3,6 +3,7 @@ app/main.py
 ===========
 Point d'entrée de l'API FastAPI - KafkaLearn Backend.
 """
+
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -72,16 +73,83 @@ app.include_router(ingest_router, prefix="/api/v1")
 # ─── Routes ──────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def accueil():
-    return f"""
-    <html>
-    <head><title>KafkaLearn Backend</title></head>
-    <body>
-        <h1>KafkaLearn Backend v{APP_VERSION}</h1>
-        <p>Modules actifs : Users, Search, Skills, Epreuves, Notifications, Referral, Payment, School, Calendar, Library, Memory, UserDocuments, DocAnalysis, Wisdom, DailyQuiz, Ingest</p>
-        <p><a href="/docs">Documentation Swagger UI</a></p>
-    </body>
-    </html>
-    """
+    return (
+        """<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KafkaLearn - Plateforme d'Apprentissage</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh; color: #e2e8f0; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
+        .hero { text-align: center; padding: 80px 0; }
+        .logo { font-size: 64px; margin-bottom: 20px; }
+        .logo span { background: linear-gradient(135deg, #6366f1, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h1 { font-size: 48px; font-weight: 700; margin-bottom: 16px; letter-spacing: -0.02em; }
+        .subtitle { font-size: 20px; color: #94a3b8; font-weight: 300; margin-bottom: 40px; }
+        .version { display: inline-block; background: #1e293b; border: 1px solid #334155; border-radius: 20px; padding: 8px 20px; font-size: 14px; color: #94a3b8; margin-bottom: 60px; }
+        .links { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+        .link { display: inline-flex; align-items: center; gap: 8px; background: #1e293b; border: 1px solid #334155; padding: 16px 32px; border-radius: 12px; text-decoration: none; color: #e2e8f0; font-weight: 500; transition: all 0.2s; }
+        .link:hover { background: #334155; border-color: #6366f1; transform: translateY(-2px); }
+        .link.primary { background: linear-gradient(135deg, #6366f1, #a855f7); border: none; }
+        .link.primary:hover { opacity: 0.9; }
+        .modules { margin-top: 80px; }
+        .modules h2 { font-size: 24px; font-weight: 600; margin-bottom: 24px; }
+        .modules-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+        .module { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; font-size: 14px; }
+        .module:hover { border-color: #6366f1; }
+        footer { margin-top: 80px; text-align: center; color: #64748b; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <div class="logo"><span>📚</span></div>
+            <h1>KafkaLearn</h1>
+            <p class="subtitle">La plateforme d'apprentissage intelligente</p>
+            <div class="version">Version """
+        + APP_VERSION
+        + """</div>
+            <div class="links">
+                <a href="/docs" class="link primary">
+                    <span>📖</span> Documentation API
+                </a>
+                <a href="/health" class="link">
+                    <span>💚</span> Health Check
+                </a>
+            </div>
+        </div>
+        <div class="modules">
+            <h2>Modules actifs</h2>
+            <div class="modules-grid">
+                <div class="module">👥 Users</div>
+                <div class="module">🔍 Search</div>
+                <div class="module">🧠 Skills</div>
+                <div class="module">📝 Epreuves</div>
+                <div class="module">🔔 Notifications</div>
+                <div class="module">🎁 Referral</div>
+                <div class="module">💳 Payment</div>
+                <div class="module">🏫 School</div>
+                <div class="module">📅 Calendar</div>
+                <div class="module">📚 Library</div>
+                <div class="module">💾 Memory</div>
+                <div class="module">📄 UserDocuments</div>
+                <div class="module">📊 DocAnalysis</div>
+                <div class="module">💡 Wisdom</div>
+                <div class="module">❓ DailyQuiz</div>
+                <div class="module">📥 Ingest</div>
+            </div>
+        </div>
+        <footer>
+            <p>KafkaLearn Backend - API propulsée par FastAPI</p>
+        </footer>
+    </div>
+</body>
+</html>"""
+    )
 
 
 @app.get("/health")

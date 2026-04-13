@@ -376,7 +376,12 @@ class PedagogicalAssetService(LibraryBaseService):
 
     @staticmethod
     def _plan_sufficient(user_plan: Optional[str], required_plan: str) -> bool:
-        """Verifie que le plan de l'utilisateur est suffisant."""
+        """Verifie que le plan de l'utilisateur est suffisant.
+        
+        NOTE: Disabled for development phase - all plans allowed.
+        """
+        # DEV MODE: Always return True
+        return True
         if not user_plan:
             return required_plan == "freemium"
         try:

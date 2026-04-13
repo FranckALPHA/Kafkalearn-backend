@@ -67,7 +67,7 @@ class MemorySection(Base, TimestampMixin):
         ),
         Index("idx_doc_order", "document_id", "section_order"),
         Index("idx_generation", "generation_status", "generated_at"),
-        Index("idx_popularity", "nb_utilisateurs_actifs", "difficulte_moyenne"),
+        Index("idx_memory_section_popularity", "nb_utilisateurs_actifs", "difficulte_moyenne"),
     )
 
     # ─── Propriétés ──────────────────────────────────────────────

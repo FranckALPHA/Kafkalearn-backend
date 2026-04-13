@@ -31,7 +31,7 @@ class SchoolMember(Base, TimestampMixin):
         CheckConstraint("role_ecole IN ('eleve', 'admin')", name="ck_role_ecole"),
         CheckConstraint("invited_via IN ('code', 'csv', 'admin_direct')", name="ck_invited_via"),
         UniqueConstraint("school_id", "user_id", name="idx_school_user_unique"),
-        Index("idx_user_active", "user_id", "is_active"),
+        Index("idx_school_member_user_active", "user_id", "is_active"),
     )
 
     def serialize_profile(self, mask_email: bool = True) -> dict:

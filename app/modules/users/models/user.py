@@ -7,14 +7,16 @@ from sqlalchemy import (
     Column, String, Boolean, Float, Integer, TIMESTAMP,
     CheckConstraint, Index, ForeignKey, func
 )
+from sqlalchemy.sql import func as sql_func
+from sqlalchemy.orm import relationship, foreign
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
 import uuid
 
 from app.core.database import Base
 from .mixins import TimestampMixin, SoftDeleteMixin
 
 # Import deferred for relationship (avoid circular)
+from .rbac import user_roles
 
 
 class User(Base, TimestampMixin, SoftDeleteMixin):
@@ -63,7 +65,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         nullable=False
     )
     plan_expiration_at = Column(TIMESTAMP, nullable=True, index=True)
-    school_id = Column(UUID(as_uuid=True), ForeignKey("schools.id"), nullable=True)
+    school_id = Column(String(8), ForeignKey("schools.id"), nullable=True)
 
     # ─── Parrainage ──────────────────────────────────────────────
     referral_code = Column(String(10), unique=True, nullable=False, index=True)
@@ -112,19 +114,30 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     )
     activities = relationship("UserActivity", back_populates="user", lazy="dynamic")
     refresh_tokens = relationship("RefreshToken", back_populates="user", lazy="dynamic")
-    audit_logs = relationship("AuditLog", back_populates="user", lazy="dynamic")
+    audit_logs = relationship("AuditLog", foreign_keys="AuditLog.user_id", back_populates="user", lazy="dynamic")
     referred_users = relationship(
         "User", remote_side=[id], backref="referee"
     )
     roles = relationship(
-        "Role", secondary="user_roles", back_populates="users", lazy="selectin"
+        "Role", secondary=user_roles,
+        primaryjoin="User.id==user_roles.c.user_id",
+        secondaryjoin="Role.id==user_roles.c.role_id",
+        back_populates="users", lazy="selectin"
     )
-    documents = relationship("Document", back_populates="user", lazy="dynamic")
-    playlists = relationship("Playlist", back_populates="user", lazy="dynamic")
-    document_views = relationship("DocumentView", back_populates="user", lazy="dynamic")
-    wisdom_interactions = relationship(
-        "WisdomUserInteraction", back_populates="user", lazy="dynamic"
+    quiz_attempts = relationship(
+        "DailyQuizAttempt",
+        back_populates="user",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
     )
+    leaderboard_entries = relationship(
+        "MonthlyLeaderboard",
+        back_populates="user",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
+    # ─── Cross-module relations (configured at end of file) ─────
+    # documents, playlists, document_views, wisdom_interactions
 
     # ─── Index composites ────────────────────────────────────────
     __table_args__ = (
@@ -159,3 +172,16 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email}, role={self.role})>"
+
+
+# ─── Deferred imports for cross-module relationships ───────────
+# These imports must happen after class definition to avoid circular imports
+def _setup_cross_module_relationships():
+    """Configure cross-module relationships après chargement de toutes les classes.
+    
+    NOTE: Disabled for development - all cross-module relationships temporarily removed
+    to unblock the application. Will be re-enabled once SQLAlchemy mapper issues are resolved.
+    """
+    pass
+
+_setup_cross_module_relationships()

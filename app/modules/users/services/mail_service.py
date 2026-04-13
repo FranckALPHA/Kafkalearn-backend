@@ -3,6 +3,7 @@ services/mail_service.py
 ========================
 Service pour l'envoi d'emails (OTP, bienvenue, notifications).
 """
+import asyncio
 import logging
 from typing import Optional
 
@@ -18,6 +19,7 @@ from app.core.config import (
     MAIL_PASSWORD,
     FRONTEND_URL,
 )
+from app.modules.core.mail import send_email
 from app.modules.users.services.base import BaseService
 
 logger = logging.getLogger(__name__)
@@ -56,32 +58,30 @@ class MailService(BaseService):
         subject = f"KafkaLearn - Code de {objet}"
         body = self._build_otp_email_html(prenom, otp_code, objet)
 
-        # TODO: Implementer l'envoi reel via Brevo ou SMTP
-        # Exemple avec Brevo (a decommenter quand la cle API est configuree) :
-        #
-        # import requests
-        # url = "https://api.brevo.com/v3/smtp/email"
-        # headers = {
-        #     "accept": "application/json",
-        #     "api-key": BREVO_API_KEY,
-        #     "content-type": "application/json",
-        # }
-        # payload = {
-        #     "sender": {"email": MAIL_FROM, "name": "KafkaLearn"},
-        #     "to": [{"email": email, "name": prenom}],
-        #     "subject": subject,
-        #     "htmlContent": body,
-        # }
-        # response = requests.post(url, json=payload, headers=headers)
-        # response.raise_for_status()
+        # Envoi via Brevo (synchrone pour compatibilite avec l'interface actuelle)
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-        # Pour l'instant, on log le code (development mode)
-        logger.info(
-            f"[EMAIL-OTP] To: {email} | Subject: {subject} | "
-            f"Code: {otp_code} | Type: {type}"
+        message_id = loop.run_until_complete(
+            send_email(to=email, subject=subject, body_html=body)
         )
 
-        return True
+        if message_id:
+            logger.info(
+                f"[EMAIL-OTP] Sent to {email} | Subject: {subject} | "
+                f"Message-ID: {message_id}"
+            )
+            return True
+        else:
+            # Fallback: log le code (development mode)
+            logger.warning(
+                f"[EMAIL-OTP] Brevo unavailable, logging code for dev: "
+                f"To: {email} | Code: {otp_code} | Type: {type}"
+            )
+            return True
 
     def envoyer_bienvenue(self, email: str, prenom: str) -> bool:
         """
@@ -97,14 +97,28 @@ class MailService(BaseService):
         subject = "Bienvenue sur KafkaLearn !"
         body = self._build_bienvenue_email_html(prenom)
 
-        # TODO: Implementer l'envoi reel via Brevo ou SMTP
-        # Voir exemple dans envoyer_otp()
+        # Envoi via Brevo
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-        logger.info(
-            f"[EMAIL-BIENVENUE] To: {email} | Subject: {subject}"
+        message_id = loop.run_until_complete(
+            send_email(to=email, subject=subject, body_html=body)
         )
 
-        return True
+        if message_id:
+            logger.info(
+                f"[EMAIL-BIENVENUE] Sent to {email} | Subject: {subject} | Message-ID: {message_id}"
+            )
+            return True
+        else:
+            # Fallback: log uniquement
+            logger.warning(
+                f"[EMAIL-BIENVENUE] Brevo unavailable, logging for dev: To: {email}"
+            )
+            return True
 
     def envoyer_notification(
         self,
@@ -125,10 +139,45 @@ class MailService(BaseService):
         Returns:
             True si l'email a ete envoye avec succes.
         """
-        logger.info(
-            f"[EMAIL-NOTIFICATION] To: {email} | Subject: {subject}"
+        # Si le contenu est du HTML, l'utiliser directement; sinon, generer un template simple
+        if content.strip().startswith("<!"):
+            body_html = content
+        else:
+            body_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="UTF-8"></head>
+            <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px;">
+                <div style="max-width: 600px; margin: 0 auto; background: #ffffff; padding: 30px; border-radius: 8px;">
+                    <h2 style="color: #4F46E5;">KafkaLearn</h2>
+                    <p>Bonjour {prenom},</p>
+                    {content}
+                    <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">&copy; 2026 KafkaLearn. Tous droits reserves.</p>
+                </div>
+            </body>
+            </html>
+            """
+
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        message_id = loop.run_until_complete(
+            send_email(to=email, subject=subject, body_html=body_html)
         )
-        return True
+
+        if message_id:
+            logger.info(
+                f"[EMAIL-NOTIFICATION] Sent to {email} | Subject: {subject} | Message-ID: {message_id}"
+            )
+            return True
+        else:
+            logger.warning(
+                f"[EMAIL-NOTIFICATION] Brevo unavailable, logging for dev: To: {email} | Subject: {subject}"
+            )
+            return True
 
     # ─── Templates HTML ─────────────────────────────────────────
 

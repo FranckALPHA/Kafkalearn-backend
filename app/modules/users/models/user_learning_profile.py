@@ -37,7 +37,7 @@ class UserLearningProfile(Base, TimestampMixin):
     dernier_rapport_at = Column(TIMESTAMP, nullable=True)
 
     # Relation
-    user = relationship("User", back_populates="learning_profile")
+    user = relationship("User")
 
     # Index GIN pour recherches dans JSONB (PostgreSQL)
     __table_args__ = (

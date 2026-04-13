@@ -46,7 +46,7 @@ class ReferralReward(Base, TimestampMixin):
     )
 
     # ─── Relationships ─────────────────────────────────────────────
-    user = relationship("User", back_populates="referral_rewards")
+    user = relationship("User")
 
     # ─── Properties ────────────────────────────────────────────────
     @property

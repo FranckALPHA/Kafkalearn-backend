@@ -52,6 +52,12 @@ async def get_optional_user(
         return None
 
 def require_can_download(current_user: User = Depends(get_current_user)):
+    """Check if user can download.
+    
+    NOTE: Disabled for development phase - everyone can download.
+    """
+    # DEV MODE: Always allow
+    return current_user
     if PLAN_HIERARCHY.index(current_user.plan_effectif) < PLAN_HIERARCHY.index("access"):
         raise HTTPException(status_code=403, detail="PLAN_INSUFFISANT")
     return current_user

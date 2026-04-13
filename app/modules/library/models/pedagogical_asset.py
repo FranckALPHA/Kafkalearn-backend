@@ -84,7 +84,7 @@ class PedagogicalAsset(Base, TimestampMixin):
     nb_notes = Column(Integer, CheckConstraint("nb_notes >= 0"), default=0)
 
     # ─── Relations ───────────────────────────────────────────────
-    user = relationship("User", back_populates="pedagogical_assets")
+    user = relationship("User")
     ratings = relationship(
         "AssetRating",
         back_populates="asset",
@@ -108,7 +108,7 @@ class PedagogicalAsset(Base, TimestampMixin):
     __table_args__ = (
         Index("idx_user_type_subject", "user_id", "asset_type", "subject"),
         Index("idx_public_explore", "is_public", "asset_type", "subject", "note_moyenne"),
-        Index("idx_user_created", "user_id", "created_at"),
+        Index("idx_ped_asset_user_created", "user_id", "created_at"),
         Index("idx_share_code", "lien_partage"),
     )
 

@@ -29,6 +29,7 @@ from app.modules.payment.routes.dependencies import (
 from app.modules.payment.services import PaymentService
 from app.modules.payment.models import PlanPrice, Transaction
 from app.modules.users.models import User
+from app.modules.skills.models import SkillUsageLog
 
 logger = logging.getLogger(__name__)
 
@@ -188,8 +189,26 @@ async def subscription_status(
         quota_ia["limit"] = plan_price.quota_valeur
         quota_ia["type"] = plan_price.quota_type
 
-        # TODO: Compter les utilisations IA reelles depuis les logs/tables appropriees
-        quota_ia["used"] = 0
+        # Compter les utilisations IA reelles depuis la table skill_usage_logs
+        now = datetime.utcnow()
+        if plan_price.quota_type == "monthly":
+            period_start = now - timedelta(days=30)
+        elif plan_price.quota_type == "daily":
+            period_start = now - timedelta(days=1)
+        elif plan_price.quota_type == "yearly":
+            period_start = now - timedelta(days=365)
+        else:
+            period_start = now - timedelta(days=30)  # default monthly
+
+        quota_ia["used"] = (
+            db.query(SkillUsageLog)
+            .filter(
+                SkillUsageLog.user_id == current_user.id,
+                SkillUsageLog.created_at >= period_start,
+                SkillUsageLog.quota_consomme == True,
+            )
+            .count()
+        )
 
     # Auto-renew: verificar s'il y a une transaction recente pour ce plan
     recent_complete = (

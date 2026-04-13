@@ -35,7 +35,7 @@ class DocumentChunk(Base, TimestampMixin):
 
     # ─── Contraintes & index ─────────────────────────────────────
     __table_args__ = (
-        Index("idx_chunk_unique", "doc_id", "chunk_idx", unique=True),
+        Index("idx_document_chunk_unique", "doc_id", "chunk_idx", unique=True),
     )
 
     # ─── Sérialisation ───────────────────────────────────────────

@@ -39,7 +39,12 @@ class Role(Base):
 
     # Relations
     permissions = relationship("Permission", secondary=role_permissions, back_populates="roles")
-    users = relationship("User", secondary=user_roles, back_populates="roles")
+    users = relationship(
+        "User", secondary=user_roles,
+        primaryjoin="Role.id==user_roles.c.role_id",
+        secondaryjoin="User.id==user_roles.c.user_id",
+        back_populates="roles"
+    )
 
     def __repr__(self) -> str:
         return f"<Role(name={self.name})>"

@@ -60,12 +60,11 @@ def get_rate_limiter_dependency(limiter: RateLimiter):
 def get_skill_dispatcher(db: Session = Depends(get_db)):
     from app.modules.skills.services.skill_dispatcher import SkillDispatcher
     from app.modules.skills.utils.llm_client import LLMClient
-    from app.core.config import GEMINI_API_KEY, MISTRAL_API_KEY
+    from app.core.config import OPENROUTER_API_KEYS
 
     llm_client = LLMClient(
         api_keys={
-            "gemini": GEMINI_API_KEY,
-            "mistral": MISTRAL_API_KEY,
+            "openrouter_api_keys": OPENROUTER_API_KEYS,
         }
     )
     return SkillDispatcher(db=db, llm_client=llm_client)

@@ -162,10 +162,7 @@ Pour éviter la surcharge des appels LLM :
 
 ### Providers supportés
 
-- **Mistral** (`mistral-small-latest`)
-- **Gemini** (`gemini-2.0-flash-lite`)
-- **DeepSeek** (`deepseek-chat`)
-- **OpenRouter** (multi-clés avec fallback)
+- **OpenRouter** (multi-clés `OPENROUTER_API_KEY_1..4` avec fallback automatique)
 
 ---
 
@@ -195,7 +192,7 @@ Pour éviter la surcharge des appels LLM :
 | Search Vectoriel | Vespa |
 | Search Textuel | Meilisearch |
 | Tâches Async | Celery + Redis |
-| LLM | Mistral / Gemini / DeepSeek / OpenRouter |
+| LLM | OpenRouter (multi-clés) |
 | Embeddings | FastEmbed |
 | Notifications | Firebase Admin SDK |
 | Paiement | NotchPay |

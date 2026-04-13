@@ -51,8 +51,8 @@ class UserSectionProgress(Base, TimestampMixin):
     interval_jours = Column(Integer, default=1)
 
     # ─── Relations ───────────────────────────────────────────────
-    user = relationship("User", back_populates="memory_progress")
-    section = relationship("MemorySection", back_populates="user_progress")
+    user = relationship("User")
+    section = relationship("MemorySection")
 
     # ─── Contraintes & Index ─────────────────────────────────────
     __table_args__ = (

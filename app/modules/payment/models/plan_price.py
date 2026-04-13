@@ -13,7 +13,7 @@ class PlanPrice(Base, TimestampMixin):
     __tablename__ = "plan_prices"
 
     # ─── Identité ────────────────────────────────────────────────
-    plan_id = Column(String(20), primary_key=True, autoincrement=True)
+    plan_id = Column(String(20), primary_key=True)
 
     # ─── Tarification ───────────────────────────────────────────
     prix_fcfa = Column(Integer, CheckConstraint("prix_fcfa >= 0"), nullable=False)

@@ -15,7 +15,7 @@ class MetadataQueue(Base, TimestampMixin):
     texte_extrait_preview = Column(Text, nullable=True)
     raison_echec = Column(String(100), nullable=False)
     metadata_tentee = Column(JSONB, default=dict, nullable=True)
-    nb_retries = Column(Integer, CheckConstraint("nb_retries >= 0", name="ck_metaq_nb_retries"), default=0)
+    nb_retries = Column(Integer, default=0)
     dernier_retry_at = Column(TIMESTAMP, nullable=True)
     is_resolved = Column(Boolean, default=False, nullable=False, index=True)
     resolved_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
@@ -27,8 +27,8 @@ class MetadataQueue(Base, TimestampMixin):
         Index("idx_reason", "raison_echec"),
     )
 
-    document = relationship("Document", back_populates="metadata_queue_entry")
-    resolver = relationship("User", foreign_keys=[resolved_by])
+    document = relationship("Document")
+    resolver = relationship("User")
 
     def serialize_for_admin(self) -> dict:
         return {

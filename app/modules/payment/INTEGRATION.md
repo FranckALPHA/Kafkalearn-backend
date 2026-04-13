@@ -116,6 +116,31 @@ if plan:
     # Check against usage counter before allowing skill/search
 ```
 
+**IA usage counting** — the `/payment/status` endpoint now counts real IA usage from
+the `skill_usage_logs` table (cross-module communication with `skills`):
+
+```python
+from app.modules.skills.models import SkillUsageLog
+
+# Count IA usage based on quota period
+period_start = datetime.utcnow() - timedelta(days=30)  # for monthly quota
+ia_used = (
+    db.query(SkillUsageLog)
+    .filter(
+        SkillUsageLog.user_id == user_id,
+        SkillUsageLog.created_at >= period_start,
+        SkillUsageLog.quota_consomme == True,
+    )
+    .count()
+)
+```
+
+The quota response includes:
+- `plan`: current plan ID
+- `used`: real count from `skill_usage_logs`
+- `limit`: quota value from `plan_prices`
+- `type`: quota period type ("monthly", "daily", "yearly")
+
 ---
 
 ## Models

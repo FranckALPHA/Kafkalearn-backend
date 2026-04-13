@@ -37,7 +37,7 @@ class AuditLog(Base):
     created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False, index=True)
 
     # Relations
-    user = relationship("User", foreign_keys=[user_id], back_populates="audit_logs")
+    user = relationship("User", foreign_keys=[user_id])
     actor = relationship("User", foreign_keys=[actor_id])
 
     __table_args__ = (

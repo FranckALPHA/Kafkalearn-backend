@@ -50,11 +50,13 @@ if skill_type == "quiz" and score is not None:
 
 ---
 
-## → Appel vers `notifications.NotificationService` (TODO)
+## → Appel vers `notifications.NotificationService` ✅ IMPLÉMENTÉ
 
 ```python
-# Quand une génération PDF longue est terminée (async)
-await NotificationService(db).send_to_user(
+# Quand une génération PDF longue est terminée (dans generate_fiche_pdf_task)
+from app.modules.notifications.services.notification_service import NotificationService
+
+NotificationService(notif_db).send_to_user(
     user_id=user_id,
     title="📄 Ta fiche est prête !",
     body=f"{titre} est disponible dans ta bibliothèque.",
@@ -66,7 +68,8 @@ await NotificationService(db).send_to_user(
 )
 ```
 
-**Quand** : Après `generate_fiche_pdf_task` réussie.
+**Où** : Dans `skills/jobs/tasks.py` → `generate_fiche_pdf_task`  
+**Quand** : Après génération PDF réussie.
 
 ---
 

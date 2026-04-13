@@ -17,12 +17,10 @@ class WorkerJob(Base, TimestampMixin):
     )
     job_type = Column(
         String(15),
-        CheckConstraint("job_type IN ('ocr','embed','both')", name="ck_wj_job_type"),
         nullable=False,
     )
     status = Column(
         String(15),
-        CheckConstraint("status IN ('pending','downloaded','processing','complete','failed')", name="ck_wj_status"),
         default="pending",
         nullable=False,
     )
@@ -35,8 +33,8 @@ class WorkerJob(Base, TimestampMixin):
     __table_args__ = (
         CheckConstraint("job_type IN ('ocr','embed','both')", name="ck_wj_job_type"),
         CheckConstraint("status IN ('pending','downloaded','processing','complete','failed')", name="ck_wj_status"),
-        Index("idx_status_created", "status", "created_at"),
+        Index("idx_worker_job_status_created", "status", "created_at"),
         Index("idx_doc_status", "document_id", "status"),
     )
 
-    document = relationship("Document", back_populates="worker_jobs")
+    document = relationship("Document")

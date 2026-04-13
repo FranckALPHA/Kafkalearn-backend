@@ -97,7 +97,7 @@ class UserDocument(Base, TimestampMixin):
         Index("idx_hash_user", "hash_contenu", "user_id"),
     )
 
-    user = relationship("User", back_populates="documents")
+    user = relationship("User")
     chunks = relationship(
         "UserDocumentChunk",
         back_populates="document",

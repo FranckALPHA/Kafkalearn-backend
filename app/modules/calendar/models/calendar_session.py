@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Column, Integer, String, Text, Float, Boolean, TIMESTAMP, CheckConstraint, Index, func
+from sqlalchemy import Column, ForeignKey, Integer, String, Text, Float, Boolean, TIMESTAMP, CheckConstraint, Index, func
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -12,7 +12,7 @@ class CalendarSession(TimestampMixin, Base):
     __tablename__ = "calendar_sessions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     subject = Column(String(100), nullable=False, index=True)
     titre = Column(String(255), nullable=True)
     planned_start = Column(TIMESTAMP, nullable=False)
@@ -76,7 +76,7 @@ class CalendarSession(TimestampMixin, Base):
         Index("idx_due_reminders", "status", "planned_start"),
     )
 
-    user = relationship("User", back_populates="calendar_sessions")
+    user = relationship("User")
     ping_log = relationship(
         "SessionPingLog",
         back_populates="session",

@@ -38,46 +38,89 @@ def extract_document_text_task(self, document_id: int):
 def vectorize_document_task(self, document_id: int):
     """Vectorize a document for semantic search.
 
-    NOTE: This is a placeholder. The actual implementation should:
+    Implementation:
     1. Split extracted text into chunks
-    2. Generate embeddings for each chunk
-    3. Store embeddings in Vespa or vector database
+    2. Generate embeddings for each chunk using FastEmbed
+    3. Store embeddings in user_document_chunks table
     """
     db = _get_db()
     try:
-        from app.modules.user_documents.models import UserDocument
+        from app.modules.user_documents.models import UserDocument, UserDocumentChunk
+        from app.modules.core.config import settings
+        from fastembed import TextEmbedding
+        import textwrap
 
         doc = db.query(UserDocument).filter(UserDocument.id == document_id).first()
         if not doc:
             logger.error("Document %s not found for vectorization", document_id)
             return {"status": "error", "message": "DOCUMENT_NOT_FOUND"}
 
+        if not doc.contenu_extrait:
+            logger.warning("Document %s has no extracted text", document_id)
+            doc.vectorization_status = "failed"
+            db.commit()
+            return {"status": "error", "message": "NO_EXTRACTED_TEXT"}
+
         # Mark as processing
         doc.vectorization_status = "processing"
         db.commit()
 
-        # TODO: Implement actual vectorization logic
-        # For now, simulate completion
+        # Chunking: split text into segments of ~500 tokens (~2000 chars)
+        chunk_size = 2000
+        text_chunks = textwrap.wrap(doc.contenu_extrait, width=chunk_size)
+
+        if not text_chunks:
+            logger.warning("Document %s produced no chunks", document_id)
+            doc.vectorization_status = "failed"
+            db.commit()
+            return {"status": "error", "message": "EMPTY_TEXT"}
+
+        # Generate embeddings using FastEmbed
+        embedding_model = TextEmbedding(model_name=settings.EMBEDDING_MODEL)
+        embeddings = list(embedding_model.embed(text_chunks))
+
+        # Delete old chunks if re-vectorizing
+        db.query(UserDocumentChunk).filter(
+            UserDocumentChunk.document_id == document_id
+        ).delete()
+
+        # Store chunks with embeddings
+        nb_chunks = 0
+        for idx, (chunk_text, embedding) in enumerate(zip(text_chunks, embeddings)):
+            chunk = UserDocumentChunk(
+                document_id=document_id,
+                user_id=doc.user_id,
+                chunk_index=idx,
+                contenu=chunk_text.strip(),
+                vecteur=embedding.tolist(),
+                is_embedded=True,
+            )
+            db.add(chunk)
+            nb_chunks += 1
+
+        # Update document
         doc.is_vectorized = True
         doc.vectorization_status = "complete"
-        doc.nb_chunks = 0  # Will be updated when actual chunking is implemented
+        doc.nb_chunks = nb_chunks
         db.commit()
 
         # Notify user
         try:
             from app.modules.notifications.services.notification_service import NotificationService
-            notif_svc = NotificationService(db=db)
-            notif_svc.send_to_user(
+            from app.core.database import SessionLocal
+            notif_db = SessionLocal()
+            NotificationService(notif_db).send_to_user(
                 user_id=doc.user_id,
                 title="Vectorisation terminee",
                 body=f"Votre document '{doc.titre}' est maintenant pret pour la recherche semantique.",
                 type_notif="document_vectorized",
             )
+            notif_db.close()
         except ImportError:
             pass
 
-        logger.info("Vectorization completed for doc %s", document_id)
-        return {"status": "complete", "document_id": document_id}
+        logger.info("Vectorization completed for doc %s: %d chunks", document_id, nb_chunks)
+        return {"status": "complete", "document_id": document_id, "nb_chunks": nb_chunks}
     except Exception as exc:
         logger.exception("Vectorization task failed for doc %s", document_id)
         db.rollback()

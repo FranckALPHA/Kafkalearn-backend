@@ -39,8 +39,8 @@ class DocumentView(Base, TimestampMixin):
     a_scrolle = Column(Boolean, default=False, nullable=False)
 
     # ─── Relations ───────────────────────────────────────────────
-    document = relationship("Document", back_populates="views")
-    user = relationship("User", back_populates="document_views")
+    document = relationship("Document")
+    user = relationship("User")
 
     # ─── Index composites ────────────────────────────────────────
     __table_args__ = (

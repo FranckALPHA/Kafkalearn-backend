@@ -24,7 +24,7 @@ class UserActivity(Base, TimestampMixin):
     user_agent = Column(String(500), nullable=True)
 
     # Relation
-    user = relationship("User", back_populates="activities")
+    user = relationship("User")
 
     # Index pour les requêtes par user + date
     __table_args__ = (

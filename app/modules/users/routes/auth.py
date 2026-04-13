@@ -12,6 +12,7 @@ from app.modules.users.schemas.requests import (
     LoginRequest,
     VerifyRequest,
     PasswordResetRequest,
+    PasswordResetVerifyRequest,
     PasswordChangeRequest,
     RefreshTokenRequest,
 )
@@ -27,7 +28,7 @@ from app.modules.users.utils.rate_limiter import (
     auth_rate_limiter,
     password_reset_rate_limiter,
 )
-from app.modules.users.utils.security import generate_fingerprint, decode_token
+from app.modules.users.utils.security import generate_fingerprint
 
 logger = logging.getLogger(__name__)
 
@@ -136,10 +137,34 @@ async def request_password_reset(
     Envoie un code OTP par email.
     Limite : 3 requêtes/5 minutes par IP.
     """
-    # TODO: Implement password reset request flow
+    user_service.demander_reset_mot_de_passe(payload.email)
     return MessageResponse(
         message="Si un compte existe avec cet email, vous recevrez un code de réinitialisation.",
         code="RESET_REQUESTED",
+    )
+
+
+@router.post(
+    "/password/reset/verify",
+    response_model=MessageResponse,
+    dependencies=[Depends(get_rate_limiter_dependency(password_reset_rate_limiter))],
+)
+async def verify_password_reset(
+    payload: PasswordResetVerifyRequest,
+    user_service=Depends(get_user_service),
+):
+    """
+    Vérifie le code OTP pour la réinitialisation de mot de passe
+    et applique le nouveau mot de passe.
+    """
+    user_service.reinitialiser_mot_de_passe(
+        email=payload.email,
+        code=payload.code,
+        nouveau_mot_de_passe=payload.new_password,
+    )
+    return MessageResponse(
+        message="Mot de passe réinitialisé avec succès. Veuillez vous reconnecter.",
+        code="PASSWORD_RESET_SUCCESS",
     )
 
 

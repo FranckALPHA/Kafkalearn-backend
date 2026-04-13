@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, String, Integer, CheckConstraint, Index, TIMESTAMP
+from sqlalchemy import Column, String, Integer, CheckConstraint, Index, TIMESTAMP, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
@@ -12,7 +12,7 @@ class IngestJob(Base, TimestampMixin):
     __tablename__ = "ingest_jobs"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    initiated_by = Column(UUID(as_uuid=True), nullable=False)
+    initiated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     job_type = Column(String(20), nullable=False)
     status = Column(String(15), default="pending", nullable=False)
     nb_fichiers_total = Column(Integer, default=0)
@@ -33,11 +33,11 @@ class IngestJob(Base, TimestampMixin):
         CheckConstraint("nb_succes >= 0", name="ck_ingest_nb_succes"),
         CheckConstraint("nb_echecs >= 0", name="ck_ingest_nb_echecs"),
         CheckConstraint("nb_doublons >= 0", name="ck_ingest_nb_doublons"),
-        Index("idx_status_created", "status", "created_at"),
+        Index("idx_ingest_job_status_created", "status", "created_at"),
         Index("idx_initiator", "initiated_by"),
     )
 
-    initiator = relationship("User", back_populates="ingest_jobs")
+    initiator = relationship("User", foreign_keys=[initiated_by])
 
     def serialize_report(self) -> dict:
         return {

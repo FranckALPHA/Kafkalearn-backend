@@ -10,7 +10,7 @@ class CalendarPersonalStudy(TimestampMixin, Base):
     __tablename__ = "calendar_personal_study"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     subject = Column(String(100), nullable=False, index=True)
     day_of_week = Column(Integer, nullable=False)
     start_time = Column(TIME, nullable=False)
@@ -33,7 +33,7 @@ class CalendarPersonalStudy(TimestampMixin, Base):
         ),
     )
 
-    user = relationship("User", back_populates="personal_study_entries")
+    user = relationship("User")
 
     def serialize(self) -> dict:
         return {

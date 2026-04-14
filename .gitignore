@@ -64,6 +64,9 @@ keys/
 nohup.out
 
 
+# Fichiers de devoir/épreuves (trop lourds)
+files/
+
 # Docker / Vespa
 app_package.zip
 

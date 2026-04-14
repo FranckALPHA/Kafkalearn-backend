@@ -33,3 +33,13 @@ class TimetableEntryRequest(BaseModel):
     day_of_week: int = Field(..., ge=0, le=6)
     start_time: str = Field(..., pattern=r"^\d{2}:\d{2}$")
     end_time: str = Field(..., pattern=r"^\d{2}:\d{2}$")
+
+
+class SessionUpdateRequest(BaseModel):
+    subject: Optional[str] = Field(None, min_length=1, max_length=100)
+    titre: Optional[str] = Field(None, max_length=255)
+    planned_start: Optional[str] = Field(None, description="ISO datetime")
+    planned_duration_minutes: Optional[int] = Field(None, ge=5, le=480)
+    ressource_principale_id: Optional[int] = None
+    ressource_principale_type: Optional[str] = None
+    humeur_debut: Optional[str] = None

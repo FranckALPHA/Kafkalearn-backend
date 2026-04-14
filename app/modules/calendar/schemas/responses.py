@@ -12,6 +12,10 @@ class SessionResponse(BaseModel):
     accumulated_seconds: int
     concentration_ratio: Optional[float] = None
     is_ai_generated: bool
+    ressource_principale_id: Optional[int] = None
+    ressource_principale_type: Optional[str] = None
+    humeur_debut: Optional[str] = None
+    note_session: Optional[str] = None
 
 
 class SessionListResponse(BaseModel):

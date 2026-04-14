@@ -125,6 +125,48 @@ class SessionStateService(CalendarBaseService):
         self.db.commit()
         return session.serialize_detail()
 
+    # ─── Mise à jour de session ───────────────────────────────
+
+    async def update_session(self, session_id: int, user_id: str, data: dict) -> dict:
+        """Met à jour les détails d'une session si elle n'est pas terminée."""
+        session = (
+            self.db.query(CalendarSession)
+            .filter(
+                CalendarSession.id == session_id,
+                CalendarSession.user_id == user_id,
+            )
+            .first()
+        )
+        if not session:
+            raise ValueError(f"Session {session_id} introuvable")
+
+        if not session.is_active_or_planned:
+            raise ValueError("Impossible de modifier une session terminée")
+
+        for key, value in data.items():
+            if value is not None:
+                if key == "planned_start":
+                    # On s'assure que c'est bien une datetime (from string ISO ou direct)
+                    if isinstance(value, str):
+                        try:
+                            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                        except ValueError:
+                            # fallback if format is slightly different
+                            pass
+                    
+                    duration = data.get("planned_duration_minutes") or session.planned_duration_minutes
+                    session.planned_end = value + timedelta(minutes=duration)
+                
+                elif key == "planned_duration_minutes":
+                    start = session.planned_start
+                    session.planned_end = start + timedelta(minutes=value)
+
+                setattr(session, key, value)
+
+        self.db.commit()
+        self.db.refresh(session)
+        return session.serialize_detail()
+
     # ─── Complétion de session ───────────────────────────────────
 
     async def completer_session(

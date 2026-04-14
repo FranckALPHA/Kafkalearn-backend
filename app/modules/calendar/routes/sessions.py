@@ -6,7 +6,7 @@ Endpoints pour la gestion des sessions d'etude du calendrier.
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.modules.calendar.schemas.requests import (
     SessionCreateRequest,
     PingRequest,
     SessionStatusUpdateRequest,
+    SessionUpdateRequest,
 )
 from app.modules.calendar.schemas.responses import (
     SessionResponse,
@@ -125,17 +126,7 @@ async def create_session(
             "type": session.ressource_principale_type,
         })
 
-    return SessionResponse(
-        id=session.id,
-        subject=session.subject,
-        titre=session.titre,
-        planned_start=session.planned_start.isoformat() if session.planned_start else None,
-        planned_end=session.planned_end.isoformat() if session.planned_end else None,
-        status=session.status,
-        accumulated_seconds=session.accumulated_seconds,
-        concentration_ratio=session.concentration_ratio,
-        is_ai_generated=session.is_ai_generated,
-    )
+    return SessionResponse(**session.serialize_detail())
 
 
 # ─── POST /calendar/sessions/{session_id}/ping ───────────────────
@@ -156,17 +147,7 @@ async def ping_session(
             user_id=str(current_user.id),
             elapsed_client=body.elapsed_client,
         )
-        return SessionResponse(
-            id=result["id"],
-            subject=result["subject"],
-            titre=result.get("titre"),
-            planned_start=result.get("planned_start"),
-            planned_end=result.get("planned_end"),
-            status=result["status"],
-            accumulated_seconds=result["accumulated_seconds"],
-            concentration_ratio=result.get("concentration_ratio"),
-            is_ai_generated=result.get("is_ai_generated", False),
-        )
+        return SessionResponse(**result)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except PermissionError as e:
@@ -175,12 +156,40 @@ async def ping_session(
         raise HTTPException(status_code=503, detail=str(e))
 
 
+# ─── PATCH /calendar/sessions/{session_id} ───────────────────────
+
+@router.patch("/sessions/{session_id}", response_model=SessionResponse)
+async def update_session(
+    session_id: int,
+    body: SessionUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    session_state_service=Depends(get_session_state_service),
+):
+    """Met a jour les details d'une session (subject, titre, etc.)."""
+    try:
+        # On ne transmet que les champs fournis (exclude_unset=True)
+        update_data = body.model_dump(exclude_unset=True)
+        if not update_data:
+            raise HTTPException(status_code=400, detail="Aucune donnée à mettre à jour")
+
+        result = await session_state_service.update_session(
+            session_id=session_id,
+            user_id=str(current_user.id),
+            data=update_data,
+        )
+        return SessionResponse(**result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # ─── PATCH /calendar/sessions/{session_id}/status ────────────────
 
 @router.patch("/sessions/{session_id}/status", response_model=SessionResponse)
 async def update_session_status(
     session_id: int,
     body: SessionStatusUpdateRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     session_state_service=Depends(get_session_state_service),
@@ -205,17 +214,17 @@ async def update_session_status(
             humeur_fin=body.humeur_fin,
             note_session=body.note_session,
         )
-        return SessionResponse(
-            id=session.id,
-            subject=session.subject,
-            titre=session.titre,
-            planned_start=session.planned_start.isoformat() if session.planned_start else None,
-            planned_end=session.planned_end.isoformat() if session.planned_end else None,
-            status=result["status"],
-            accumulated_seconds=result["accumulated_seconds"],
-            concentration_ratio=result.get("concentration_ratio"),
-            is_ai_generated=session.is_ai_generated,
+
+        # Background: enrichir les signaux temporels (Coach IA)
+        background_tasks.add_task(
+            _enrich_temporal_signals,
+            user_id=str(current_user.id),
+            matiere=session.subject,
+            duration_min=session.accumulated_seconds // 60 if session.accumulated_seconds else 30,
+            completed=True,
         )
+
+        return SessionResponse(**result)
 
     session.status = body.status
     if body.humeur_fin:
@@ -225,17 +234,7 @@ async def update_session_status(
     db.commit()
     db.refresh(session)
 
-    return SessionResponse(
-        id=session.id,
-        subject=session.subject,
-        titre=session.titre,
-        planned_start=session.planned_start.isoformat() if session.planned_start else None,
-        planned_end=session.planned_end.isoformat() if session.planned_end else None,
-        status=session.status,
-        accumulated_seconds=session.accumulated_seconds,
-        concentration_ratio=session.concentration_ratio,
-        is_ai_generated=session.is_ai_generated,
-    )
+    return SessionResponse(**session.serialize_detail())
 
 
 # ─── GET /calendar/suggestions ───────────────────────────────────
@@ -310,3 +309,28 @@ async def get_heatmap(
         total=result["total"],
         max_count=result["max_count"],
     )
+
+
+# ────────────────────────────────────────────────────────────────
+# Background enrichment (post-response, non bloquant)
+# ────────────────────────────────────────────────────────────────
+
+def _enrich_temporal_signals(user_id: str, matiere: str, duration_min: int, completed: bool):
+    """Enrichit les signaux temporels après une session calendar complétée."""
+    try:
+        from app.core.database import SessionLocal
+        from app.modules.users.services.coach_service import CoachService
+
+        db = SessionLocal()
+        coach = CoachService(db)
+        coach.record_session(
+            user_id=user_id,
+            duration_min=duration_min,
+            matiere=matiere or "general",
+            score=80 if completed else 30,  # estimation
+            difficulty="medium",
+            completed=completed,
+        )
+        db.close()
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Failed to enrich temporal signals: {e}")

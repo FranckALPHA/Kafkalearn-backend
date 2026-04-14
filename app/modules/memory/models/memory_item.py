@@ -58,12 +58,26 @@ class MemoryItem(Base, TimestampMixin):
 
     # ─── Méthodes ────────────────────────────────────────────────
     def get_content_for_language(self, langue: str = "fr") -> dict:
-        """Retourne le contenu adapté à la langue demandée."""
+        """Retourne le contenu adapté à la langue demandée.
+        Supporte deux formats :
+        - Bilingue : {"fr": {"question":..., "answer":...}, "en": {...}}
+        - Legacy : {"question":..., "answer":..., "translations": {"en":...}}
+        """
         content = dict(self.content_json) if self.content_json else {}
-        # Si des traductions existent, les merger
+
+        # Format bilingue (nouveau)
+        if langue in content and isinstance(content[langue], dict):
+            return content[langue]
+
+        # Fallback sur le français si la langue demandée n'existe pas
+        if "fr" in content and isinstance(content["fr"], dict):
+            return content["fr"]
+
+        # Format legacy avec translations
         translations = content.get("translations", {})
         if langue in translations:
             content.update(translations[langue])
+
         return content
 
     def serialize_for_review(
@@ -75,7 +89,11 @@ class MemoryItem(Base, TimestampMixin):
             "id": self.id,
             "section_id": self.section_id,
             "item_type": self.item_type,
-            "content": content,
+            "content": {
+                "question": content.get("question", ""),
+                "options": content.get("options"),
+                "difficulty": content.get("difficulty", "medium"),
+            },
             "taux_reussite": self.taux_reussite,
             "nb_tentatives": self.nb_tentatives,
             "difficulte_percue": self.difficulte_percue,
@@ -83,6 +101,7 @@ class MemoryItem(Base, TimestampMixin):
         }
         if reveal_answer:
             result["answer"] = content.get("answer")
+            result["explanation"] = content.get("explanation")
         return result
 
     def __repr__(self) -> str:

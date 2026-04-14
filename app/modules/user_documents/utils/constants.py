@@ -2,6 +2,9 @@ ALLOWED_MIME_TYPES = [
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/msword",
+    "image/jpeg",
+    "image/png",
+    "image/gif",
 ]
 MAX_FILE_SIZE_MB = 20
 PLAN_QUOTAS = {

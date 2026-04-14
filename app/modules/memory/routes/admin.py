@@ -1,114 +1,116 @@
 """
-routes/admin.py
-===============
-Admin routes for memory module (SuperAdmin only).
+routes/admin.py (memory module)
+===============================
+Endpoints admin pour la gestion du graphe cognitif global.
 """
 import logging
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.modules.memory.routes.dependencies import (
     get_db,
     get_current_user,
-    get_generator_service,
+    get_rate_limiter_dependency,
 )
-from app.modules.memory.services.memory_generator_service import MemoryGeneratorService
-from app.modules.memory.models import MemorySection, MemoryItem, UserSectionProgress, MemoryItemAttempt
 from app.modules.users.models import User
+from app.modules.memory.services.concept_graph_service import ConceptGraphService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin/memory", tags=["Memory Admin"])
+router = APIRouter(prefix="/memory/admin", tags=["Memory Admin - Graph"])
 
 
-def _require_superadmin(user: User):
-    """Ensure the current user is a SuperAdmin.
-    
-    NOTE: Disabled for development phase - any user can access.
-    """
-    # DEV MODE: Allow any user
-    return
-    if user.role != "superadmin":
-        raise HTTPException(status_code=403, detail="SUPERADMIN_REQUIRED")
+def _require_superadmin(current_user: User):
+    if current_user.role not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="ADMIN_REQUIRED")
 
 
-# -------------------------------------------------------------------
-# GET /admin/memory/stats — global memory stats (SuperAdmin only)
-# -------------------------------------------------------------------
-@router.get("/stats")
-async def get_global_stats(
+@router.get("/graph/global")
+async def get_global_graph(
+    relation: Optional[str] = Query(None, description="Filtrer par type de relation"),
+    matiere: Optional[str] = Query(None, description="Filtrer par matière"),
+    min_confidence: float = Query(0.0, ge=0.0, le=1.0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get global memory statistics across all users."""
-    _require_superadmin(user)
+    """
+    Liste les arêtes du graphe cognitif global (couche programme).
+    Utilisé pour la validation manuelle des prérequis détectés par le LLM.
+    """
+    _require_superadmin(current_user)
 
-    total_sections = db.query(MemorySection).count()
-    total_items = db.query(MemoryItem).count()
-    total_attempts = db.query(MemoryItemAttempt).count()
-    total_user_progress_records = db.query(UserSectionProgress).count()
-
-    # Average accuracy across all attempts
-    if total_attempts > 0:
-        correct_count = (
-            db.query(MemoryItemAttempt)
-            .filter(MemoryItemAttempt.est_correct.is_(True))
-            .count()
-        )
-        accuracy = correct_count / total_attempts
-    else:
-        accuracy = 0.0
-
-    # Sections by generation status
-    sections_by_status = {}
-    for status in ["pending", "generating", "complete", "partial", "failed"]:
-        count = (
-            db.query(MemorySection)
-            .filter(MemorySection.generation_status == status)
-            .count()
-        )
-        sections_by_status[status] = count
-
-    # Unique users with memory activity
-    active_users = (
-        db.query(MemoryItemAttempt.user_id)
-        .distinct()
-        .count()
+    graph_svc = ConceptGraphService(db)
+    edges = graph_svc.get_edges(
+        user_id=None,  # Global only
+        relation=relation,
+        matiere=matiere,
+        min_confidence=min_confidence,
+        limit=limit,
     )
 
     return {
-        "total_sections": total_sections,
-        "total_items": total_items,
-        "total_attempts": total_attempts,
-        "total_progress_records": total_user_progress_records,
-        "accuracy": round(accuracy, 4),
-        "sections_by_status": sections_by_status,
-        "active_users": active_users,
+        "edges": edges,
+        "total": len(edges),
     }
 
 
-# -------------------------------------------------------------------
-# POST /admin/memory/regenerate/{section_id} — regenerate section (SuperAdmin only)
-# -------------------------------------------------------------------
-@router.post("/regenerate/{section_id}")
-async def regenerate_section(
-    section_id: int,
+@router.post("/graph/global/{edge_id}/validate")
+async def validate_edge(
+    edge_id: str,
+    is_valid: bool,
+    corrected_relation: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-    generator_service: MemoryGeneratorService = Depends(get_generator_service),
+    current_user: User = Depends(get_current_user),
 ):
-    """Trigger regeneration of a memory section."""
-    _require_superadmin(user)
+    """
+    Valide, corrige ou supprime une arête du graphe global.
+    is_valid=False → supprime l'arête
+    corrected_relation → modifie le type de relation
+    """
+    _require_superadmin(current_user)
 
-    section = db.query(MemorySection).filter(MemorySection.id == section_id).first()
-    if not section:
-        raise HTTPException(status_code=404, detail="SECTION_NOT_FOUND")
+    from app.modules.memory.jobs.tasks import validate_global_graph_edge_task
 
-    result = await generator_service.regenerer_section(section_id=section_id, force=True)
+    result = validate_global_graph_edge_task.delay(
+        edge_id=edge_id,
+        is_valid=is_valid,
+        corrected_relation=corrected_relation,
+    )
+    return {"task_id": result.id, "status": "queued"}
+
+
+@router.get("/graph/global/stats")
+async def get_global_graph_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Statistiques du graphe cognitif global."""
+    _require_superadmin(current_user)
+
+    rows = db.execute(text("""
+        SELECT relation, COUNT(*) as count, AVG(confidence) as avg_conf
+        FROM concept_graph
+        WHERE user_id IS NULL
+        GROUP BY relation
+        ORDER BY count DESC
+    """)).fetchall()
+
+    total = db.execute(text("SELECT COUNT(*) FROM concept_graph WHERE user_id IS NULL")).scalar()
+
+    matieres = db.execute(text("""
+        SELECT matiere, COUNT(*) as count
+        FROM concept_graph
+        WHERE user_id IS NULL AND matiere IS NOT NULL
+        GROUP BY matiere
+        ORDER BY count DESC
+    """)).fetchall()
 
     return {
-        "section_id": section_id,
-        "status": result.get("status", result.get("nb_items_generes", 0)),
-        "message": result.get("message", f"Regenerated {result.get('nb_items_generes', 0)} items"),
+        "total_edges": total,
+        "by_relation": [{"relation": r[0], "count": r[1], "avg_confidence": round(float(r[2]), 3)} for r in rows],
+        "by_matiere": [{"matiere": m[0], "count": m[1]} for m in matieres],
     }

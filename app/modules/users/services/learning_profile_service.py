@@ -27,12 +27,7 @@ class LearningProfileService(BaseService):
     async def obtenir_profil_complet(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
         Retourne le profil d'apprentissage complet d'un utilisateur.
-
-        Args:
-            user_id: UUID de l'utilisateur.
-
-        Returns:
-            Dictionnaire contenant toutes les donnees du profil, ou None.
+        Les lacunes/forces sont maintenant lus depuis le graphe cognitif (concept_graph).
         """
         profile = (
             self.db.query(UserLearningProfile)
@@ -43,20 +38,29 @@ class LearningProfileService(BaseService):
         if not profile:
             return None
 
+        # Lacunes et forces depuis le graphe cognitif
+        try:
+            from app.modules.memory.services.concept_graph_service import ConceptGraphService
+            graph_svc = ConceptGraphService(self.db)
+            lacunes = graph_svc.get_concepts_lacunes(user_id)
+            forces = graph_svc.get_concepts_maitrises(user_id)
+            stats = graph_svc.get_statistiques_personnelles(user_id)
+        except Exception:
+            lacunes = {}
+            forces = {}
+            stats = {}
+
         return {
             "id": profile.id,
             "user_id": str(profile.user_id),
             "historique_recherches": profile.historique_recherches or [],
-            "lacunes": profile.lacunes or {},
-            "forces": profile.forces or {},
+            "lacunes": lacunes,
+            "forces": forces,
             "interets": profile.interets or [],
             "matieres_frequentes": profile.matieres_frequentes or {},
-            "intentions_recentes": profile.intentions_recentes or [],
-            "skills_utilises": profile.skills_utilises or {},
-            "sujets_vus": profile.sujets_vus or [],
             "heures_actives": profile.heures_actives or {},
             "jours_actifs": profile.jours_actifs or {},
-            "score_par_matiere": profile.score_par_matiere or {},
+            "score_par_matiere": stats,
             "last_wisdom_id": profile.last_wisdom_id,
             "dernier_rapport_at": (
                 profile.dernier_rapport_at.isoformat() if profile.dernier_rapport_at else None
@@ -118,17 +122,6 @@ class LearningProfileService(BaseService):
             matieres_freq[matiere] = matieres_freq.get(matiere, 0) + 1
         profile.matieres_frequentes = matieres_freq
 
-        # Mettre a jour les intentions recentes (FIFO 20)
-        if intention:
-            intentions = profile.intentions_recentes or []
-            intentions.append({
-                "intention": intention,
-                "timestamp": datetime.utcnow().isoformat(),
-            })
-            if len(intentions) > MAX_INTENTIONS_SIZE:
-                intentions = intentions[-MAX_INTENTIONS_SIZE:]
-            profile.intentions_recentes = intentions
-
         self.db.commit()
         self._invalidate_profile_cache(str(user_id))
 
@@ -145,20 +138,12 @@ class LearningProfileService(BaseService):
         lacune_notion: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Enregistre le score d'un quiz et met a jour les lacunes/forces.
-
-        Args:
-            user_id: UUID de l'utilisateur.
-            matiere: Matiere du quiz.
-            score: Score obtenu (0-100).
-            lacune_notion: Notion identifiee comme lacune (si score faible).
-
-        Returns:
-            Dictionnaire avec les scores et lacunes mis a jour.
-
-        Raises:
-            ValueError: Si le profil n'existe pas.
+        Enregistre le score d'un quiz et met à jour le graphe cognitif.
+        Score < 50% → arête A_ECHOUE_SUR dans concept_graph
+        Score >= 75% → arête MAITRISE dans concept_graph
         """
+        from app.modules.memory.services.concept_graph_service import ConceptGraphService
+
         profile = (
             self.db.query(UserLearningProfile)
             .filter(UserLearningProfile.user_id == user_id)
@@ -167,45 +152,167 @@ class LearningProfileService(BaseService):
         if not profile:
             raise ValueError("LEARNING_PROFILE_NOT_FOUND")
 
-        # Mettre a jour le score par matiere (moyenne mobile)
-        scores = profile.score_par_matiere or {}
-        ancien_score = scores.get(matiere, {})
-        if isinstance(ancien_score, dict):
-            count = ancien_score.get("count", 0) + 1
-            old_avg = ancien_score.get("avg", 0)
-            new_avg = ((old_avg * (count - 1)) + score) / count if count > 0 else score
-            scores[matiere] = {"avg": round(new_avg, 2), "count": count}
-        else:
-            scores[matiere] = {"avg": score, "count": 1}
-        profile.score_par_matiere = scores
+        graph_svc = ConceptGraphService(self.db)
 
-        # Mettre a jour les lacunes (score < 50%)
-        lacunes = profile.lacunes or {}
-        forces = profile.forces or {}
-
+        # Écrire dans le graphe cognitif
         if score < 50:
-            lacunes_mat = lacunes.get(matiere, [])
-            if lacune_notion and lacune_notion not in lacunes_mat:
-                lacunes_mat.append(lacune_notion)
-            lacunes[matiere] = lacunes_mat
-            # Retirer des forces si present
-            forces.pop(matiere, None)
+            notion = lacune_notion or "general"
+            graph_svc.add_edge(
+                user_id=user_id,
+                source=notion,
+                target=notion,
+                relation="A_ECHOUE_SUR",
+                confidence=min(score / 50.0, 1.0),
+                source_type="quiz",
+                matiere=matiere,
+                context=f"Quiz score: {score}%",
+            )
         elif score >= 75:
-            forces[matiere] = {
-                "score": score,
-                "last_updated": datetime.utcnow().isoformat(),
-            }
-            # Retirer des lacunes si present
-            lacunes.pop(matiere, None)
-
-        profile.lacunes = lacunes
-        profile.forces = forces
+            graph_svc.add_edge(
+                user_id=user_id,
+                source=matiere,
+                target=matiere,
+                relation="MAITRISE",
+                confidence=score / 100.0,
+                source_type="quiz",
+                matiere=matiere,
+                context=f"Quiz score: {score}%",
+            )
 
         self.db.commit()
         self._invalidate_profile_cache(str(user_id))
 
+        lacunes = graph_svc.get_concepts_lacunes(user_id)
+        forces = graph_svc.get_concepts_maitrises(user_id)
+
         return {
-            "score_par_matiere": scores,
             "lacunes": lacunes,
             "forces": forces,
+        }
+
+    def analyser_lacunes_retroactif(self, user_id: str) -> Dict[str, Any]:
+        """
+        Analyse rétroactive des lacunes à partir des sessions quiz existantes.
+        Écrit les résultats dans le graphe cognitif (concept_graph).
+
+        Parcours toutes les QuizSession soumises de l'utilisateur,
+        agrège les scores par matière et les notions problématiques.
+
+        Args:
+            user_id: UUID de l'utilisateur.
+
+        Returns:
+            Dictionnaire avec les lacunes et forces calculées (depuis le graphe).
+
+        Raises:
+            ValueError: Si le profil n'existe pas.
+        """
+        from uuid import UUID
+        from app.modules.skills.models import QuizSession
+        from app.modules.memory.services.concept_graph_service import ConceptGraphService
+
+        user_uuid = UUID(user_id)
+
+        profile = (
+            self.db.query(UserLearningProfile)
+            .filter(UserLearningProfile.user_id == user_uuid)
+            .first()
+        )
+        if not profile:
+            raise ValueError("LEARNING_PROFILE_NOT_FOUND")
+
+        graph_svc = ConceptGraphService(self.db)
+
+        # Récupérer tous les quiz soumis de l'utilisateur
+        quiz_sessions = (
+            self.db.query(QuizSession)
+            .filter(
+                QuizSession.user_id == user_uuid,
+                QuizSession.submitted_at.isnot(None),
+                QuizSession.score_percent.isnot(None),
+                QuizSession.matiere.isnot(None),
+            )
+            .order_by(QuizSession.submitted_at.desc())
+            .all()
+        )
+
+        if not quiz_sessions:
+            return {"lacunes": {}, "forces": {}, "quiz_analyses": 0}
+
+        # Agrégation par matière
+        matiere_scores: Dict[str, List[float]] = {}
+        matiere_notions_faibles: Dict[str, set] = {}
+
+        for qs in quiz_sessions:
+            matiere = qs.matiere
+            score = qs.score_percent or 0
+
+            matiere_scores.setdefault(matiere, []).append(score)
+
+            # Notions faibles depuis lacunes_detectees
+            if qs.lacunes_detectees:
+                matiere_notions_faibles.setdefault(matiere, set())
+                for lacune in qs.lacunes_detectees:
+                    notion = lacune.get("notion")
+                    if notion:
+                        matiere_notions_faibles[matiere].add(notion)
+
+            # Notion depuis le champ notion du quiz si score faible
+            if score < 50 and qs.notion:
+                matiere_notions_faibles.setdefault(matiere, set())
+                matiere_notions_faibles[matiere].add(qs.notion)
+
+        # Écrire dans le graphe cognitif
+        for matiere, scores in matiere_scores.items():
+            avg_score = sum(scores) / len(scores)
+            notions_faibles = matiere_notions_faibles.get(matiere, set())
+
+            if avg_score < 50:
+                # Lacunes : A_ECHOUE_SUR pour chaque notion
+                for notion in (notions_faibles or {"general"}):
+                    graph_svc.add_edge(
+                        user_id=user_id,
+                        source=notion,
+                        target=notion,
+                        relation="A_ECHOUE_SUR",
+                        confidence=min(avg_score / 50.0, 1.0),
+                        source_type="migration",
+                        matiere=matiere,
+                        context=f"Rétroactif: {len(scores)} quiz analysés",
+                    )
+            elif avg_score >= 75:
+                # Maîtrise
+                graph_svc.add_edge(
+                    user_id=user_id,
+                    source=matiere,
+                    target=matiere,
+                    relation="MAITRISE",
+                    confidence=avg_score / 100.0,
+                    source_type="migration",
+                    matiere=matiere,
+                    context=f"Rétroactif: {len(scores)} quiz analysés",
+                )
+
+        self.db.commit()
+        self._invalidate_profile_cache(str(user_id))
+
+        logger.info(
+            f"Analyse rétroactive user {user_id}: {len(matiere_scores)} matières, "
+            f"{len(quiz_sessions)} quiz analysés"
+        )
+
+        # Retourner les lacunes/forces depuis le graphe
+        lacunes = graph_svc.get_concepts_lacunes(user_id)
+        forces = graph_svc.get_concepts_maitrises(user_id)
+
+        scores_dict = {
+            m: {"avg": round(sum(s) / len(s), 2), "count": len(s)}
+            for m, s in matiere_scores.items()
+        }
+
+        return {
+            "lacunes": lacunes,
+            "forces": forces,
+            "score_par_matiere": scores_dict,
+            "quiz_analyses": len(quiz_sessions),
         }

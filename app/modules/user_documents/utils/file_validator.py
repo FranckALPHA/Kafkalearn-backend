@@ -8,7 +8,12 @@ class FileValidator:
         "application/pdf": b"%PDF",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document": b"PK\x03\x04",
         "application/msword": b"\xD0\xCF\x11\xE0",
+        "image/jpeg": b"\xFF\xD8\xFF",
+        "image/png": b"\x89PNG",
+        "image/gif": b"GIF8",
     }
+
+    ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".jpg", ".jpeg", ".png", ".gif"}
 
     @staticmethod
     async def validate_upload(file: UploadFile) -> dict:
@@ -29,8 +34,16 @@ class FileValidator:
             raise HTTPException(400, f"EXTENSION_INVALIDE: {detected_mime}")
 
         ext = Path(file.filename).suffix.lower() if file.filename else ""
-        if ext not in [".pdf", ".docx", ".doc"]:
-            ext = ".pdf" if detected_mime == "application/pdf" else ".docx"
+        if ext not in FileValidator.ALLOWED_EXTENSIONS:
+            mime_to_ext = {
+                "application/pdf": ".pdf",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+                "application/msword": ".doc",
+                "image/jpeg": ".jpg",
+                "image/png": ".png",
+                "image/gif": ".gif",
+            }
+            ext = mime_to_ext.get(detected_mime, ".pdf")
 
         safe_filename = f"{secrets.token_hex(16)}_{(file.filename or 'doc')[:8]}{ext}"
         return {

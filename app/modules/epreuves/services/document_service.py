@@ -161,7 +161,7 @@ class DocumentService(EpreuvesBaseService):
         docs = q.offset((page - 1) * limit).limit(limit).all()
 
         return {
-            "hits": [d.serialize_list_item() for d in docs],
+            "documents": [d.serialize_list_item() for d in docs],
             "total": total,
             "page": page,
             "limit": limit,
@@ -249,20 +249,15 @@ class DocumentService(EpreuvesBaseService):
         user_id: Any,
         limit: int = 10,
     ) -> List[dict]:
-        """Recommande des documents basés sur les lacunes du profil utilisateur."""
-        from app.modules.users.models import UserLearningProfile
+        """Recommande des documents basés sur les lacunes du graphe cognitif."""
+        from app.modules.memory.services.concept_graph_service import ConceptGraphService
 
-        profile = (
-            self.db.query(UserLearningProfile)
-            .filter(UserLearningProfile.user_id == user_id)
-            .first()
-        )
-        if not profile or not profile.lacunes:
+        graph_svc = ConceptGraphService(self.db)
+        lacunes = graph_svc.get_concepts_lacunes(str(user_id))
+        if not lacunes:
             return []
 
-        lacunes = profile.lacunes  # dict: {matiere: [notions]}
         recommended = []
-
         for matiere, notions in lacunes.items():
             if not notions:
                 continue

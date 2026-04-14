@@ -39,22 +39,22 @@ class VespaClient:
         """Recherche hybride ANN + BM25 sur Vespa."""
         where_clause = self._build_where_clause(filters)
 
+        # Recherche BM25 sur le champ content (le schema déployé n'a pas de champ 'default')
+        words = query_text.split() if query_text else []
+        yql_parts = [f'content contains "{w}"' for w in words] if words else ["true"]
+        yql_text = f"weakAnd({' or '.join(yql_parts)})"
+
         yql = f"""
             select * from sources *
             where ({where_clause})
-            and (
-                ({{"targetHits": {top_k * 2}, "approximate": "true"}}nearestNeighbor(chunk_embedding, query_vector))
-                or
-                weakAnd(default contains @query_text or titre contains @query_text)
-            )
+            and {yql_text}
             limit {top_k * 2}
         """
 
         payload = {
             "yql": yql,
             "query_text": query_text,
-            "input.query(query_vector)": query_vector,
-            "ranking": "hybrid_rank",
+            "ranking": "unranked",
             "timeout": "8s",
             "presentation.format": "json",
         }
@@ -91,8 +91,16 @@ class VespaClient:
         conditions = []
         for key, value in filters.items():
             if value and key in VESPA_FIELD_MAP:
-                safe_value = str(value).replace("'", "''")
-                conditions.append(f"{VESPA_FIELD_MAP[key]} = '{safe_value}'")
+                field_name, field_type = VESPA_FIELD_MAP[key]
+                if field_type == "int":
+                    try:
+                        conditions.append(f"{field_name} = {int(value)}")
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid int value for {key}: {value}")
+                else:
+                    # Champs string/array<string> → utiliser 'contains'
+                    safe_value = str(value).replace('"', '\\"')
+                    conditions.append(f'{field_name} contains "{safe_value}"')
         return " and ".join(conditions) if conditions else "true"
 
     def _parse_hits(self, hits: List[Dict]) -> List[Dict]:
@@ -100,15 +108,28 @@ class VespaClient:
         chunks = []
         for hit in hits:
             fields = hit.get("fields", {})
-            ranking_features = fields.get("rankingFeatures", {})
+            # Parser document_id Vespa: "id:epreuves:epreuve::381_156" -> 381
+            raw_doc_id = fields.get("documentid", "")
+            doc_id_int = None
+            if raw_doc_id and "::" in raw_doc_id:
+                try:
+                    doc_id_int = int(raw_doc_id.split("::")[1].split("_")[0])
+                except (ValueError, IndexError):
+                    doc_id_int = fields.get("doc_id")
+            elif raw_doc_id:
+                try:
+                    doc_id_int = int(raw_doc_id)
+                except ValueError:
+                    doc_id_int = fields.get("doc_id")
+
             chunks.append({
-                "chunk_id": fields.get("chunk_id"),
-                "document_id": fields.get("document_id"),
-                "document_nom": fields.get("document_nom", ""),
-                "texte_chunk": fields.get("texte_chunk", ""),
+                "chunk_id": fields.get("doc_id", 0),
+                "document_id": doc_id_int or 0,
+                "document_nom": fields.get("nom_original", ""),
+                "texte_chunk": fields.get("content", ""),
                 "matiere": fields.get("matiere"),
                 "niveau": fields.get("niveau"),
-                "score_ann": ranking_features.get("nearestNeighbor(chunk_embedding,query_vector)"),
+                "score_ann": None,  # Pas de recherche ANN pour l'instant (schema déployé ne le supporte pas)
                 "score_bm25": fields.get("relevance"),
                 "chunk_idx": fields.get("chunk_idx"),
             })

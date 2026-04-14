@@ -116,14 +116,10 @@ def verify_cache_coherence_task():
 
         for doc in documents:
             try:
-                result = db.run_sync(
-                    lambda s: AnalysisCacheService(db=s).verifier_coherence_hash(doc.id)
-                )
+                result = AnalysisCacheService(db=db).verifier_coherence_hash(doc.id)
                 total_checked += 1
                 if not result["coherent"]:
-                    count = db.run_sync(
-                        lambda s: AnalysisCacheService(db=s).invalider_analyses_document(doc.id)
-                    )
+                    count = AnalysisCacheService(db=db).invalider_analyses_document(doc.id)
                     total_invalidated += count
             except ValueError:
                 pass

@@ -135,32 +135,9 @@ class SkillDispatcher(SkillsBaseService):
     def _verify_plan_access(self, skill_type: str, user_plan: str) -> bool:
         """
         Vérifie que le plan utilisateur permet d'accéder au skill.
-        
-        NOTE: Disabled for development phase - all skills accessible.
+
+        NOTE : Tous les plans ont les mêmes privilèges — accès libre.
         """
-        # DEV MODE: Skip plan checks
-        return True
-        
-        PLAN_REQUIREMENTS = {
-            'fiche': 'access',
-            'quiz': 'access',
-            'solver': 'access',
-            'tuteur': 'freemium',  # Toujours accessible
-            'corrige': 'access',
-            'epreuve': 'pro',
-            'visualisation': 'pro'
-        }
-
-        PLAN_HIERARCHY = ['freemium', 'access', 'premium', 'pro', 'unlimited', 'school']
-
-        required = PLAN_REQUIREMENTS.get(skill_type, 'freemium')
-        user_level = PLAN_HIERARCHY.index(user_plan) if user_plan in PLAN_HIERARCHY else 0
-        required_level = PLAN_HIERARCHY.index(required) if required in PLAN_HIERARCHY else 0
-
-        if user_level < required_level:
-            from fastapi import HTTPException
-            raise HTTPException(403, "PLAN_INSUFFISANT")
-
         return True
     
     async def extraire_params_llm(self, texte: str, skill_type: str, user_profile: dict) -> dict:

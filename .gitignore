@@ -1,6 +1,5 @@
 # Python
 __pycache__/
-.cache/
 *.py[cod]
 *$py.class
 *.so
@@ -33,9 +32,11 @@ lib/
 include/
 share/
 
-# Données et Logs
+# Données et caches locaux
 data/
 .cache/
+.cache_fastembed/
+/tmp/fastembed_cache/
 *.log
 server.log
 server_restart.log
@@ -47,6 +48,7 @@ server_restart.log
 .idea/
 *.swp
 *.swo
+*.pyc
 
 # OS
 .DS_Store
@@ -58,17 +60,30 @@ secret.py
 
 # Secrets / keys
 keys/
-*firebase*adminsdk*.json
-*firebase-service-account*.json
+*.json
+nohup.out
 
-# Docker (si nécessaire d'ignorer les volumes locaux persistés hors du dossier data)
-# Vespa artefacts
+
+# Docker / Vespa
 app_package.zip
 
+# Ingest archive (PDFs traités)
+data/ingest_archive/
+
 # Docs binaries
-docs/*.pdf
-docs/*.jpg
-docs/*.jpeg
-docs/*.png
-docs/*.mhtml
-docs/*.mp4
+docs/**/*.pdf
+docs/**/*.jpg
+docs/**/*.jpeg
+docs/**/*.png
+docs/**/*.mhtml
+docs/**/*.mp4
+
+# Makefile backup
+*.bak
+*~
+
+# Coverage / Tests
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/

@@ -157,22 +157,19 @@ class RecommendationEngine(EpreuvesBaseService):
         user_id: Any,
         limit: int = 10,
     ) -> List[dict]:
-        """Combine recommandations par lacunes, populaires et similaires."""
-        from app.modules.users.models import UserLearningProfile
+        """Combine recommandations par lacunes (graphe), populaires et similaires."""
+        from app.modules.memory.services.concept_graph_service import ConceptGraphService
 
-        profile = (
-            self.db.query(UserLearningProfile)
-            .filter(UserLearningProfile.user_id == user_id)
-            .first()
-        )
+        graph_svc = ConceptGraphService(self.db)
+        lacunes = graph_svc.get_concepts_lacunes(str(user_id))
+        stats = graph_svc.get_statistiques_personnelles(str(user_id))
 
         lacunes_docs = []
         populaires_docs = []
         similaires_docs = []
 
-        # 1. Lacunes-based (40% of limit)
-        if profile and profile.lacunes:
-            lacunes = profile.lacunes
+        # 1. Lacunes-based (40% of limit) — depuis le graphe cognitif
+        if lacunes:
             lacune_limit = max(1, int(limit * 0.4))
             for matiere, notions in lacunes.items():
                 if notions:
@@ -185,19 +182,12 @@ class RecommendationEngine(EpreuvesBaseService):
                     if lacunes_docs:
                         break
 
-        # 2. Populaires (30% of limit)
+        # 2. Populaires (30% of limit) — matière principale du graphe
         pop_limit = max(1, int(limit * 0.3))
-        if profile and profile.matieres_frequentes:
-            # Use most frequent matiere
-            top_matiere = max(
-                profile.matieres_frequentes,
-                key=profile.matieres_frequentes.get,
-            )
+        matiere_principale = stats.get("matiere_principale")
+        if matiere_principale:
             populaires_docs = self.recommander_populaires(
-                matiere=top_matiere,
-                niveau=profile.forces.get(top_matiere, {}).get("niveau")
-                if profile.forces
-                else None,
+                matiere=matiere_principale,
                 limit=pop_limit,
             )
         else:

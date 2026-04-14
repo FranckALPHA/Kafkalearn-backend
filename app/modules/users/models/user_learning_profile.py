@@ -1,9 +1,11 @@
 """
 models/user_learning_profile.py
 ===============================
-Profil cognitif de l'apprenant avec JSONB pour les données dynamiques.
+Profil cognitif de l'apprenant.
+Les lacunes/forces/scores sont maintenant gérés par concept_graph (graphe cognitif).
+Ce modèle conserve les données non relationnelles (historique, préférences, metadata).
 """
-from sqlalchemy import Column, Integer, TIMESTAMP, ForeignKey, Index, func
+from sqlalchemy import Column, Integer, TIMESTAMP, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
@@ -20,18 +22,12 @@ class UserLearningProfile(Base, TimestampMixin):
         nullable=False, index=True
     )
 
-    # JSONB dynamiques (profil cognitif vivant)
+    # ─── Données non relationnelles (conservées) ──────────────────
     historique_recherches = Column(JSONB, default=list)  # FIFO 100
-    lacunes = Column(JSONB, default=dict)  # {matiere: [notions]}
-    forces = Column(JSONB, default=dict)
     interets = Column(JSONB, default=list)
     matieres_frequentes = Column(JSONB, default=dict)  # {matiere: count}
-    intentions_recentes = Column(JSONB, default=list)  # FIFO 20
-    skills_utilises = Column(JSONB, default=dict)
-    sujets_vus = Column(JSONB, default=list)
     heures_actives = Column(JSONB, default=dict)  # {heure: count}
     jours_actifs = Column(JSONB, default=dict)  # {jour: count}
-    score_par_matiere = Column(JSONB, default=dict)  # {matiere: score_moyen}
 
     last_wisdom_id = Column(Integer, nullable=True)
     dernier_rapport_at = Column(TIMESTAMP, nullable=True)
@@ -39,11 +35,9 @@ class UserLearningProfile(Base, TimestampMixin):
     # Relation
     user = relationship("User")
 
-    # Index GIN pour recherches dans JSONB (PostgreSQL)
+    # ─── Index ────────────────────────────────────────────────────
     __table_args__ = (
-        Index("idx_lacunes_gin", "lacunes", postgresql_using="gin"),
-        Index("idx_forces_gin", "forces", postgresql_using="gin"),
-        Index("idx_score_matiere_gin", "score_par_matiere", postgresql_using="gin"),
+        Index("idx_user_learning_profile_user", "user_id"),
     )
 
     def __repr__(self) -> str:

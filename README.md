@@ -1,6 +1,6 @@
 # 🎓 KafkaLearn Backend
 
-Backend API pour la plateforme **KafkaLearn** — moteur de recherche sémantique hybride et agent d'apprentissage intelligent pour les épreuves scolaires camerounaises.
+Backend API pour la plateforme **KafkaLearn** — moteur de recherche sémantique hybride, **graphe cognitif** et agent d'apprentissage intelligent pour les épreuves scolaires camerounaises.
 
 > Plus de 2000 épreuves indexées, analysées et restituées via une architecture moderne et modulaire.
 
@@ -8,14 +8,14 @@ Backend API pour la plateforme **KafkaLearn** — moteur de recherche sémantiqu
 
 ## ✨ Fonctionnalités
 
-- **Recherche Hybride (Vespa + Meilisearch)** : Combine recherche vectorielle (ANN) et lexicale (BM25) pour des résultats pertinents.
-- **Agent Skills IA (Gemini / Mistral)** : Fiches de révision, Quiz interactifs, Solvers, Corrigés, Graphes mathématiques.
-- **Architecture Modulaire** : Organisation par domaines — Search, Skills, Users, Payment, Notifications, Ingest.
-- **Gestion de Projet avec `uv`** : Gestion de dépendances ultra-rapide et déterministe (`pyproject.toml`).
-- **Sessions Redis** : Gestion des quotas IA et historique de session (TTL configurable).
-- **Paiements NotchPay** : Passerelle de paiement pour les abonnements (Premium/Access).
-- **Notifications FCM** : Notifications push via Firebase Cloud Messaging.
-- **Tâches Async Celery** : Workers séparés pour tâches lourdes (LLM, PDF) et emails.
+- **Recherche Hybride (Vespa + Meilisearch)** : Combine recherche vectorielle (ANN) et lexicale (BM25).
+- **🧠 Graphe Cognitif** : Deux couches — globale (programme camerounais) + personnelle (lacunes, maîtrises, prérequis). Déduplication sémantique automatique.
+- **🤖 Coach IA** : Recommandations personnalisées combinant graphe cognitif + 4 couches de signaux (temporel, comportemental, cognitif, contextuel).
+- **📊 Feedback Explicite** : L'utilisateur évalue le contenu → le profil se met à jour immédiatement.
+- **📅 Planning Intelligent** : Interleaving (mélange des matières) + répétition espacée (SM-2).
+- **💬 Extraction LLM Automatique** : Documents → notions + prérequis → graphe global. Chat → enrichissement profil personnel.
+- **Agent Skills IA** : Fiches de révision, Quiz interactifs, Solvers, Corrigés.
+- **Paiements NotchPay**, **Notifications FCM**, **Tâches Async Celery**.
 
 ---
 
@@ -23,36 +23,63 @@ Backend API pour la plateforme **KafkaLearn** — moteur de recherche sémantiqu
 
 ```
 app/
-├── core/                   # Services transversaux & Configuration
-│   ├── config.py           # Settings & variables d'environnement
-│   ├── database.py         # SQLAlchemy & Modèles globaux
-│   ├── api_errors.py       # Gestion centralisée des erreurs
-│   └── database_init.py    # Initialisation de la BDD
-│
+├── core/                   # Configuration & Services transversaux
 ├── modules/
 │   ├── search/             # Moteur RAG (Retriever, Reranker, Responder)
-│   │   ├── services/       # Orchestrator, Retriever, Reranker, Analytics
-│   │   ├── routes/         # Endpoints recherche & admin
-│   │   ├── models/         # Modèles SQL (logs, suggestions)
-│   │   ├── schemas/        # Schémas Pydantic (requêtes/réponses)
-│   │   ├── utils/          # Vespa client, Quota manager, Constants
-│   │   └── jobs/           # Tâches Celery liées à la recherche
-│   │
-│   ├── skills/             # Agent IA (Fiche, Quiz, Solver, etc.)
-│   │   ├── services/       # Skills, Chat, Quiz Correction, Analytics
-│   │   ├── routes/         # Endpoints skills & chat
-│   │   ├── models/         # Sessions, Messages, Logs
-│   │   ├── schemas/        # Requêtes & réponses
-│   │   └── jobs/           # Celery app, tâches & crons
-│   │
-│   ├── users/              # Authentification & Gestion Profils
-│   ├── payment/            # Plans & Abonnements NotchPay
-│   ├── notifications/      # Notifications FCM (topics, devices)
-│   ├── ingest/             # Indexation & Workers
-│   └── school/             # Gestion des Établissements
-│
+│   ├── skills/             # Agent IA (Fiche, Quiz, Solver, Chat)
+│   ├── memory/             # 🧠 Graphe cognitif + Extraction LLM + SM-2
+│   │   ├── models/         # concept_graph (graphe), memory_items, etc.
+│   │   ├── services/       # ConceptGraphService, NotionDeduplicator
+│   │   ├── routes/         # cognitive-report, graph_extraction
+│   │   ├── seed/           # prerequisites_cm.py (64 arêtes globales)
+│   │   └── jobs/           # Celery: extract_global_graph, cleanup
+│   ├── users/              # Auth, Profil, 🧠 Coach IA, 💬 Feedback
+│   │   ├── models/         # User, UserLearningProfile, UserLearningSignals
+│   │   ├── services/       # CoachService, Feedback handler
+│   │   └── routes/         # coach/, feedback/, profile/
+│   ├── epreuves/           # Documents & recommandations
+│   ├── library/            # Assets pédagogiques
+│   ├── calendar/           # Planning & sessions
+│   ├── payment/            # NotchPay
+│   ├── notifications/      # FCM
+│   └── ...
 └── main.py                 # Point d'entrée FastAPI
 ```
+
+---
+
+## 🧠 Graphe Cognitif — Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    concept_graph (PostgreSQL)                    │
+│                                                                 │
+│  🌍 Couche GLOBALE (user_id = NULL)                             │
+│  64+ arêtes PRE_REQUIS_DE — programme camerounais               │
+│  arithmétique → équations → fonctions → limites → dérivées      │
+│                                                                 │
+│  👤 Couche PERSONNELLE (user_id = UUID)                         │
+│  A_ECHOUE_SUR / MAITRISE / EN_COURS par utilisateur             │
+│                                                                 │
+│  + canonical_name : déduplication sémantique                    │
+│  + confidence : confiance dans le lien (0.0-1.0)                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Extraction automatique** :
+- **Documents** → LLM détecte notions + prérequis → déduplication sémantique → graphe global
+- **Chat/Quiz** → LLM détecte concepts → enrichit le graphe personnel
+
+---
+
+## 📊 4 Couches de Signaux
+
+| Couche | Contenu | Exemple |
+|--------|---------|---------|
+| **Temporel** | Habitudes horaires, streak, régularité | `preferred_hours: {"20": 5, "21": 8}` |
+| **Comportemental** | Profil pratique/théorique, préférences | `profile_type: "practical"`, `retry_after_failure: true` |
+| **Cognitif** | Blocages profonds vs superficiels, vélocité | `deep_blockages: {"derivees": {weeks_stuck: 3}}` |
+| **Contextuel** | Mode urgence, autodidacte, contraintes | `urgency_mode: true`, `days_until_exam: 5` |
 
 ---
 
@@ -60,109 +87,104 @@ app/
 
 ### 1. Prérequis
 
-- **uv** : `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- **Docker & Docker Compose** : PostgreSQL, Redis, Vespa, Meilisearch, Celery
-- **Fichier `.env`** : copier `.env.example` et remplir les valeurs
+- **Docker & Docker Compose** : PostgreSQL, Redis, Vespa, Meilisearch
+- **Make** : `sudo apt install make` (généralement déjà installé)
+- **Fichier `.env`** : copier `.env.example` et remplir les clés API
 
 ```bash
 cp .env.example .env
 ```
 
-### 2. Installation & Lancement
+### 2. Installation & Lancement (1 commande)
 
 ```bash
 # 1. Cloner le repo
 git clone https://github.com/FranckALPHA/Kafkalearn-backend.git
 cd Kafkalearn-backend
 
-# 2. Synchroniser l'environnement
-uv sync
-
-# 3. Lancer l'infrastructure (Postgres, Redis, Vespa, Meilisearch, Celery)
-docker compose up -d
-
-# 4. Déployer le schéma Vespa (si nécessaire)
-uv run python deploy_vespa.py
-
-# 5. Appliquer les migrations SQL
-uv run alembic upgrade head
-
-# 6. Démarrer le serveur API
-uv run uvicorn app.main:app --port 9990 --reload
+# 2. Tout installer et lancer le serveur
+make run
 ```
 
-### 3. Mode développement (auto-création BDD)
+`make run` fait automatiquement :
+- ✅ Installe `uv` si absent
+- ✅ Installe les dépendances Python (`uv sync`)
+- ✅ Télécharge le modèle FastEmbed (BAAI/bge-small-en-v1.5)
+- ✅ Installe Tesseract OCR + données françaises
+- ✅ Installe Poppler (pdf2image)
+- ✅ Installe libmagic (détection MIME)
+- ✅ Lance le serveur sur `http://0.0.0.0:9880`
+
+### 3. Commandes Make disponibles
 
 ```bash
-AUTO_CREATE_DB=1 uv run uvicorn app.main:app --port 9990 --reload
+make run          # Setup complet + lancement du serveur
+make setup        # Installation des dépendances uniquement
+make server       # Lancement du serveur seul
+make docker       # Démarrage de l'infrastructure Docker
+make docker-down  # Arrêt de l'infrastructure Docker
+make test         # Tests rapides des dépendances
+make clean        # Nettoyage des caches Python
+make clean-venv   # Suppression du venv (relancer avec make setup)
+make help         # Affiche l'aide complète
+```
+
+### 4. Infrastructure Docker
+
+```bash
+# Démarrer la base de données et les moteurs de recherche
+make docker
+
+# Vérifier que tout tourne
+docker compose ps
+
+# Voir les logs
+make docker-logs
+```
+
+### 5. Migrations (premier lancement)
+
+```bash
+# Créer les tables du graphe cognitif et des signaux
+uv run python -m app.modules.memory.migration.create_concept_graph
+uv run python -m app.modules.memory.seed.prerequisites_cm
+uv run python -m app.modules.memory.migration.migrate_lacunes_to_graph
+uv run python -m app.modules.users.migration.create_user_learning_signals
+uv run python -m app.modules.users.migration.create_user_feedback
+uv run python -m app.modules.ingest.migration.create_ingest_step_logs
+```
+
+### 6. Ingestion locale de documents
+
+```bash
+# Scanner un dossier de PDF (natifs ou scannés avec OCR)
+curl -X POST 'http://127.0.0.1:9880/api/v1/ingest/local-folder' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <token>' \
+  -d '{"folder_path": "/home/user/documents/cours", "force": false}'
 ```
 
 ---
 
 ## 📡 Endpoints Principaux
 
-Tous les endpoints sont exposés sous le préfixe `/api/v1`.
+### Recherche & Skills
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `POST` | `/api/v1/search/rechercher` | Recherche sémantique hybride |
+| `POST` | `/api/v1/skills/run` | Lancement d'un agent IA |
+| `POST` | `/api/v1/skills/quiz/{id}/soumettre` | Correction quiz + enrichissement graphe |
 
-| Action | Méthode | Endpoint | Description |
-|---|---|---|---|
-| **Recherche** | `POST` | `/api/v1/search/rechercher` | Recherche sémantique hybride |
-| **Recherche Lite** | `POST` | `/api/v1/search/lite` | Recherche textuelle rapide (Meilisearch) |
-| **IA Skills** | `POST` | `/api/v1/skills/run` | Lancement d'un agent IA (Fiche, Quiz...) |
-| **Quiz Correction** | `POST` | `/api/v1/skills/quiz/corriger` | Corrige les réponses quiz + profil cognitif |
-| **Chat Skills** | `POST` | `/api/v1/skills/chat` | Session conversationnelle avec un skill |
-| **Auth** | `POST` | `/api/v1/users/auth/login` | Connexion & génération de token |
-| **Notifications** | `POST` | `/api/v1/notifications/register` | Enregistre un device + topics |
-| **Notifications** | `GET` | `/api/v1/notifications/me/history` | Historique notifications utilisateur |
-
----
-
-## 🧠 Exemples d'Utilisation
-
-### Recherche Hybride
-
-```bash
-POST /api/v1/search/rechercher
-```
-
-```json
-{
-  "query": "dérivée d'une fonction",
-  "top_k": 5
-}
-```
-
-### Lancer un Quiz
-
-```bash
-POST /api/v1/skills/run
-```
-
-```json
-{
-  "skill": "quiz",
-  "prompt": "quiz sur la Révolution française",
-  "params": {
-    "nb_questions": 10,
-    "matiere": "Histoire",
-    "niveau": "Terminale"
-  }
-}
-```
-
----
-
-## ⚙️ Configuration LLM
-
-Pour éviter la surcharge des appels LLM :
-
-| Variable | Description | Défaut |
-|---|---|---|
-| `LLM_MAX_CONCURRENT_REQUESTS` | Max appels LLM en parallèle | `2` |
-| `LLM_MIN_INTERVAL_MS` | Délai minimal entre 2 appels (ms) | `250` |
-
-### Providers supportés
-
-- **OpenRouter** (multi-clés `OPENROUTER_API_KEY_1..4` avec fallback automatique)
+### 🧠 Graphe Cognitif & Coach IA
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `GET` | `/api/v1/memory/cognitive-report` | Rapport cognitif complet (lacunes + parcours) |
+| `GET` | `/api/v1/memory/cognitive-report/{concept}/prerequis` | Chaîne de prérequis d'un concept |
+| `POST` | `/api/v1/memory/admin/graph/extract-document` | Extraire notions d'un doc → graphe |
+| `GET` | `/api/v1/users/coach/recommendation` | **Recommandation Coach IA** (QUOI + COMMENT) |
+| `GET` | `/api/v1/users/coach/study-plan?days=7` | **Planning intelligent** (interleaving + SM-2) |
+| `GET` | `/api/v1/users/coach/signals` | Voir ses 4 couches de signaux |
+| `POST` | `/api/v1/users/feedback/?feedback_type=...` | **Feedback explicite** |
 
 ---
 
@@ -170,14 +192,12 @@ Pour éviter la surcharge des appels LLM :
 
 | Service | Port | Description |
 |---|---|---|
-| **PostgreSQL** | `15432` | Base de données principale (pgvector) |
+| **PostgreSQL** | `15432` | Base principale (pgvector + concept_graph) |
 | **Redis** | `16379` | Cache, sessions, broker Celery |
 | **Vespa** | `18080` / `19071` | Moteur de recherche vectoriel |
 | **Meilisearch** | `17700` | Moteur de recherche textuelle |
-| **Celery Worker** | — | Tâches par défaut |
-| **Celery Heavy** | — | Tâches LLM & PDF |
-| **Celery Emails** | — | Envoi d'emails |
-| **Celery Beat** | — | Planification de tâches |
+
+> **Note** : L'application tourne en local (`uvicorn`). Seul l'infrastructure externe est dans Docker.
 
 ---
 
@@ -191,26 +211,16 @@ Pour éviter la surcharge des appels LLM :
 | Cache / Broker | Redis 7 |
 | Search Vectoriel | Vespa |
 | Search Textuel | Meilisearch |
+| Graphe Cognitif | PostgreSQL (CTE récursifs) |
+| Déduplication | FastEmbed + cosine similarity |
+| LLM | OpenRouter (multi-clés, fallback) |
+| Embeddings | FastEmbed (BAAI/bge-small-en-v1.5) |
+| Répétition Espacée | Algorithme SM-2 |
 | Tâches Async | Celery + Redis |
-| LLM | OpenRouter (multi-clés) |
-| Embeddings | FastEmbed |
-| Notifications | Firebase Admin SDK |
 | Paiement | NotchPay |
+| Notifications | Firebase Admin SDK |
 | Gestionnaire | uv |
 
 ---
 
-## 🚧 Roadmap
-
-- [x] Refonte architecturale modulaire
-- [x] Migration vers `uv`
-- [x] Intégration des paiements NotchPay
-- [x] Notifications FCM
-- [ ] Tests unitaires & d'intégration
-- [ ] Interface Dashboard Web
-- [ ] Documentation OpenAPI complète
-- [ ] CI/CD automatisé
-
----
-
-**Développé avec ❤️ pour l'éducation au Cameroun**
+**Développé avec ❤️ pour l'éducation au Cameroun 🇨🇲**

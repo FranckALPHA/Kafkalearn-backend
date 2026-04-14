@@ -7,7 +7,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.modules.memory.schemas import (
@@ -226,6 +226,7 @@ async def submit_answer(
     section_id: int,
     item_id: int,
     body: AnswerSubmitRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     grader_service: GraderService = Depends(get_grader_service),
@@ -292,6 +293,18 @@ async def submit_answer(
             progress.progression = round(total_items / max(len(db.query(MemoryItem).filter(MemoryItem.section_id == section_id).all()) or 1, 1) * 100, 2)
 
     db.commit()
+
+    # Background: enrichir les signaux cognitifs + le graphe cognitif (Coach IA)
+    background_tasks.add_task(
+        _enrich_cognitive_signals,
+        user_id=str(user.id),
+        matiere=item.section.document.matiere if item.section and item.section.document else None,
+        score=grading["score"],
+        difficulty="hard" if grading["score"] < 40 else "medium" if grading["score"] < 70 else "easy",
+        completed=grading["est_correct"],
+        section_id=section_id,
+        item_id=item_id,
+    )
 
     return {
         "item_id": item_id,
@@ -419,3 +432,79 @@ async def get_memory_stats(
     """Get user's memory statistics."""
     stats = await stats_service.calculer_stats_utilisateur(user_id=str(user.id))
     return MemoryStatsResponse(**stats)
+
+
+# ────────────────────────────────────────────────────────────────
+# Background enrichment (post-response, non bloquant)
+# ────────────────────────────────────────────────────────────────
+
+def _enrich_cognitive_signals(user_id: str, matiere: str, score: float, difficulty: str, completed: bool,
+                              section_id: int = None, item_id: int = None):
+    """
+    Enrichit les signaux cognitifs ET le graphe cognitif après une réponse memory.
+    Deux couches mises à jour :
+    1. UserLearningSignals (4 couches : temporel, comportemental, cognitif, contextuel)
+    2. concept_graph (A_ECHOUE_SUR / MAITRISE lié au concept de la section)
+    """
+    try:
+        from app.core.database import SessionLocal
+        from app.modules.users.services.coach_service import CoachService
+
+        db = SessionLocal()
+        coach = CoachService(db)
+
+        # Couche 1 : signaux d'apprentissage
+        coach.record_session(
+            user_id=user_id,
+            duration_min=5,
+            matiere=matiere or "general",
+            score=score,
+            difficulty=difficulty,
+            completed=completed,
+        )
+
+        # Couche 2 : graphe cognitif (concept_graph)
+        if section_id:
+            from app.modules.memory.models import MemorySection
+            from app.modules.memory.services.concept_graph_service import ConceptGraphService
+
+            section = db.query(MemorySection).filter(MemorySection.id == section_id).first()
+            if section:
+                graph_svc = ConceptGraphService(db)
+                # Le concept = le titre de la section (ex: "EXERCICE 1: Dérivées")
+                concept = section.section_title
+                # Extraire la notion principale du titre
+                notion = concept.split(":")[-1].strip() if ":" in concept else concept
+                notion = notion[:100]  # Limiter la longueur
+
+                if score < 50:
+                    # Échec → arête A_ECHOUE_SUR
+                    graph_svc.add_edge(
+                        user_id=user_id,
+                        source=notion,
+                        target=notion,
+                        relation="A_ECHOUE_SUR",
+                        confidence=min(score / 50.0, 1.0),
+                        source_type="memory",
+                        matiere=matiere,
+                        canonical_name=notion,
+                        context=f"section_id={section_id}, item_id={item_id}, score={score}",
+                    )
+                elif score >= 75:
+                    # Succès → arête MAITRISE
+                    graph_svc.add_edge(
+                        user_id=user_id,
+                        source=notion,
+                        target=notion,
+                        relation="MAITRISE",
+                        confidence=score / 100.0,
+                        source_type="memory",
+                        matiere=matiere,
+                        canonical_name=notion,
+                        context=f"section_id={section_id}, item_id={item_id}, score={score}",
+                    )
+
+        db.commit()
+        db.close()
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Failed to enrich cognitive signals: {e}")

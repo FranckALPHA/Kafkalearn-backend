@@ -1,7 +1,7 @@
 """
 services/skill_recommender_service.py
 =====================================
-Recommandation de skills basée sur le profil d'apprentissage.
+Recommandation de skills basée sur le graphe cognitif.
 """
 import logging
 from typing import Dict, Any, List
@@ -12,30 +12,26 @@ logger = logging.getLogger(__name__)
 
 
 class SkillRecommenderService(SkillsBaseService):
-    """Recommande des skills pertinents selon le profil utilisateur."""
+    """Recommande des skills pertinents selon le graphe cognitif de l'utilisateur."""
 
     async def recommander_pour_session(
         self, user_id: str, matiere: str, sujet_session: str = None
     ) -> Dict[str, Any]:
         """
         Recommande un skill pertinent pour une session d'étude
-        basé sur le profil d'apprentissage et les lacunes détectées.
+        basé sur le graphe cognitif et les lacunes détectées.
         """
-        from app.modules.users.models import UserLearningProfile
-        from uuid import UUID
-
-        # Lecture du profil pour personnalisation
+        # Lecture des lacunes depuis le graphe cognitif
         try:
-            profile = (
-                self.db.query(UserLearningProfile)
-                .filter(UserLearningProfile.user_id == UUID(user_id))
-                .first()
-            )
+            from app.modules.memory.services.concept_graph_service import ConceptGraphService
+            graph_svc = ConceptGraphService(self.db)
+            lacunes = graph_svc.get_concepts_lacunes(user_id)
+            has_lacune = matiere in lacunes
         except Exception:
-            profile = None
+            has_lacune = False
 
-        # Logique basée sur les lacunes et l'historique
-        if profile and profile.lacunes and matiere in profile.lacunes:
+        # Logique basée sur les lacunes du graphe
+        if has_lacune:
             return {
                 "skill": "fiche",
                 "raison": f"Tu as des lacunes en {matiere}. Une fiche de révision t'aidera.",

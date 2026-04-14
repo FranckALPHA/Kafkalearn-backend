@@ -41,10 +41,11 @@ STOPWORDS_FR = {
 }
 
 # ─── Vespa field mapping ────────────────────────────────────────
+# (nom_champ_vespa, type) — types: "string" (utilise contains) ou "int" (utilise =)
+# Note: type_doc/type_document n'existe pas dans le schema Vespa déployé, ignoré
 VESPA_FIELD_MAP = {
-    "matiere": "matiere",
-    "niveau": "niveau",
-    "serie": "serie",
-    "annee": "annee",
-    "type_doc": "type_document",
+    "matiere": ("matiere", "string"),
+    "niveau": ("niveau", "string"),
+    "serie": ("serie", "string"),
+    "annee": ("annee", "int"),
 }

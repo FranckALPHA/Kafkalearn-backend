@@ -12,6 +12,7 @@ from redis import Redis
 
 from app.modules.search.services.base import SearchBaseService
 from app.modules.search.utils.vespa_client import VespaClient
+from app.core.config import VESPA_URL
 from app.modules.search.utils.constants import (
     MOTS_INTENTION_EXPLICATION,
     MOTS_INTENTION_ENTRAINEMENT,
@@ -26,7 +27,7 @@ class RetrieverService(SearchBaseService):
 
     def __init__(self, db: Session, redis: Redis = None, vespa_endpoint: str = None):
         super().__init__(db, redis)
-        self.vespa = VespaClient(endpoint=vespa_endpoint or "http://localhost:18080")
+        self.vespa = VespaClient(endpoint=vespa_endpoint or VESPA_URL)
 
     async def recherche_hybride(
         self,

@@ -13,12 +13,7 @@ router = APIRouter(prefix="/admin/library", tags=["Admin Library"])
 
 
 def _require_superadmin(user: User):
-    """Check if user is superadmin.
-    
-    NOTE: Disabled for development phase - any user can access.
-    """
-    # DEV MODE: Allow any user
-    return
+    """Check if user is superadmin or admin."""
     if user.role not in ("superadmin", "admin"):
         raise HTTPException(status_code=403, detail="SUPERADMIN_REQUIRED")
 

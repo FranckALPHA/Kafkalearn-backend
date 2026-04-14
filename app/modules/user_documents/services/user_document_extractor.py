@@ -78,6 +78,8 @@ class UserDocumentExtractorService(UserDocumentsBaseService):
             # Extract text based on mime type
             if doc.mimetype == "application/pdf":
                 extracted_text, nb_pages = self._extract_pdf(file_bytes)
+            elif doc.mimetype.startswith("image/"):
+                extracted_text, nb_pages = self._extract_image(file_bytes)
             else:
                 # Fallback for doc/docx - simple approach
                 extracted_text = f"[Texte brut - {doc.mimetype}] {doc.nom_fichier_original}"
@@ -161,7 +163,8 @@ class UserDocumentExtractorService(UserDocumentsBaseService):
     # Internal helpers
     # ------------------------------------------------------------------
     def _extract_pdf(self, file_bytes: bytes):
-        """Extract text from PDF using pdfplumber. Returns (text, nb_pages)."""
+        """Extract text from PDF. Native first, then OCR fallback."""
+        # Try native extraction first
         try:
             import io
             import pdfplumber
@@ -177,12 +180,60 @@ class UserDocumentExtractorService(UserDocumentsBaseService):
                     if text:
                         all_text.append(text)
 
-            return "\n\n".join(all_text), page_count
-        except ImportError:
-            logger.warning("pdfplumber not installed, falling back to raw decode")
-            return file_bytes.decode("utf-8", errors="ignore"), 1
+            native_text = "\n\n".join(all_text)
+            if native_text and len(native_text.strip()) > 50:
+                return native_text, page_count
         except Exception:
-            logger.exception("pdfplumber extraction failed")
+            logger.warning("pdfplumber extraction failed, trying OCR fallback")
+
+        # Fallback to OCR
+        return self._extract_pdf_ocr(file_bytes)
+
+    def _extract_pdf_ocr(self, file_bytes: bytes):
+        """OCR extraction for scanned PDFs. Returns (text, nb_pages)."""
+        try:
+            from pdf2image import convert_from_bytes
+            import pytesseract
+            import tempfile
+
+            # Write to temp file for pdf2image
+            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
+                tmp.write(file_bytes)
+                tmp_path = tmp.name
+
+            images = convert_from_bytes(file_bytes, dpi=200)
+            text_parts = []
+            for img in images:
+                text_parts.append(pytesseract.image_to_string(img, lang='fra'))
+
+            import os
+            os.unlink(tmp_path)
+
+            return "\n\n".join(text_parts), len(images)
+        except ImportError:
+            logger.warning("OCR tools not installed")
+            return None, None
+        except Exception:
+            logger.exception("OCR extraction failed")
+            return None, None
+
+    def _extract_image(self, file_bytes: bytes):
+        """Extract text from image using OCR (pytesseract). Returns (text, nb_pages=1)."""
+        try:
+            import pytesseract
+            from PIL import Image
+            import io
+
+            image = Image.open(io.BytesIO(file_bytes))
+            text = pytesseract.image_to_string(image, lang='fra')
+            if text and len(text.strip()) > 10:
+                return text, 1
+            return None, 1
+        except ImportError:
+            logger.warning("pytesseract or PIL not installed")
+            return None, None
+        except Exception:
+            logger.exception("Image OCR extraction failed")
             return None, None
 
     def _queue_vectorization_if_allowed(self, doc: UserDocument):

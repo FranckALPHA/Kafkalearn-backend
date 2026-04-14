@@ -164,8 +164,9 @@ class AssetRecommendationService(LibraryBaseService):
         return list(set(owned_ids + copied_ids))
 
     def _get_user_profile(self, user_id) -> dict:
-        """Recupere le profil de l'utilisateur (lacunes, classe, serie)."""
+        """Recupere le profil de l'utilisateur (lacunes depuis le graphe, classe, serie)."""
         from app.modules.users.models import User
+        from app.modules.memory.services.concept_graph_service import ConceptGraphService
 
         user = (
             self.db.query(User)
@@ -175,9 +176,16 @@ class AssetRecommendationService(LibraryBaseService):
         if not user:
             return {}
 
-        lacunes = []
-        if user.matiere_faible:
-            lacunes.append(user.matiere_faible)
+        # Lacunes depuis le graphe cognitif (concept_graph)
+        try:
+            graph_svc = ConceptGraphService(self.db)
+            lacunes_dict = graph_svc.get_concepts_lacunes(str(user_id))
+            # Aplatir en liste de notions
+            lacunes = []
+            for notions in lacunes_dict.values():
+                lacunes.extend(notions)
+        except Exception:
+            lacunes = []
 
         return {
             "lacunes": lacunes,

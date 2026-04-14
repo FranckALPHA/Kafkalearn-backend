@@ -227,3 +227,297 @@ def update_item_difficulty_task(self):
         raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
     finally:
         db.close()
+
+
+# -------------------------------------------------------------------
+# Task: Extract global concept graph from documents (LLM-driven)
+# -------------------------------------------------------------------
+@celery_app.task(
+    name="memory.tasks.extract_global_graph_from_documents",
+    queue="heavy",
+    bind=True,
+    max_retries=3,
+)
+def extract_global_graph_from_documents_task(self, batch_size: int = 50):
+    """
+    Analyse les documents epreuves et construit le graphe cognitif global.
+    One-shot au premier lancement, puis incremental (nouveaux docs uniquement).
+    """
+    db = _get_db()
+    try:
+        import json
+        from app.modules.memory.services.concept_graph_service import ConceptGraphService
+        from app.modules.skills.utils.llm_client import LLMClient, LLMProvider
+        from app.core.config import OPENROUTER_API_KEYS
+        from app.modules.epreuves.models import Document
+        from sqlalchemy import text
+
+        # Documents deja analyses
+        analyzed = db.execute(
+            text(
+                "SELECT DISTINCT CAST(context->>'document_id' AS INTEGER) "
+                "FROM concept_graph WHERE source_type = 'document_analysis'"
+            )
+        ).fetchall()
+        analyzed_doc_ids = {r[0] for r in analyzed if r[0]}
+
+        docs = (
+            db.query(Document)
+            .filter(Document.is_validated == True)
+            .limit(batch_size)
+            .all()
+        )
+        if analyzed_doc_ids:
+            docs = [d for d in docs if d.id not in analyzed_doc_ids]
+
+        if not docs:
+            logger.info("Aucun nouveau document a analyser pour le graphe global")
+            return {"status": "no_new_documents", "analyzed": 0}
+
+        logger.info(f"Analyse de {len(docs)} documents pour le graphe global...")
+
+        api_keys = {"openrouter_api_keys": [k for k in OPENROUTER_API_KEYS if k]}
+        client = LLMClient(api_keys, default_provider=LLMProvider.OPENROUTER)
+        graph_svc = ConceptGraphService(db)
+
+        total_edges = 0
+        total_docs_analyzed = 0
+
+        for doc in docs:
+            try:
+                content_preview = ""
+                if hasattr(doc, 'texte_extrait') and doc.texte_extrait:
+                    content_preview = doc.texte_extrait[:3000]
+                else:
+                    content_preview = f"{doc.nom_affiche or ''} | {doc.matiere or ''} | {doc.niveau or ''}"
+
+                prompt = f"""Analyse ce document du programme scolaire camerounais et extrais les relations de prerequis implicites.
+
+Document:
+Titre: {doc.nom_affiche} | Matiere: {doc.matiere} | Niveau: {doc.niveau} | Serie: {doc.serie}
+Contenu: {content_preview}
+
+Retourne UNIQUEMENT un JSON valide avec cette structure :
+{{
+  "notions_principales": [
+    {{"nom": "derivees", "profondeur": 4, "matiere": "Mathematiques"}}
+  ],
+  "pre_requis_detectes": [
+    {{"source": "limites", "target": "derivees", "matiere": "Mathematiques", "confidence": 0.85}}
+  ]
+}}
+
+Regles : profondeur 1-5, confidence 0.6-0.9, target = notion du document, source = prerequis implicite.
+"""
+
+                response = client.generate(
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=1500,
+                    response_format="json",
+                )
+
+                text = response.get("text", "").strip()
+                if text.startswith("```"):
+                    text = text.split("```", 2)[-2].strip()
+                    if text.startswith("json"):
+                        text = text[4:].strip()
+
+                result = json.loads(text)
+
+                for notion in result.get("notions_principales", []):
+                    graph_svc.add_edge(
+                        user_id=None,
+                        source=notion["nom"],
+                        target=notion["nom"],
+                        relation="EN_COURS",
+                        confidence=1.0,
+                        source_type="document_analysis",
+                        matiere=notion.get("matiere", doc.matiere),
+                        canonical_name=notion["nom"],
+                        context=json.dumps({"document_id": doc.id, "profondeur": notion.get("profondeur")}),
+                    )
+                    total_edges += 1
+
+                for rel in result.get("pre_requis_detectes", []):
+                    graph_svc.add_edge(
+                        user_id=None,
+                        source=rel["source"],
+                        target=rel["target"],
+                        relation="PRE_REQUIS_DE",
+                        confidence=rel.get("confidence", 0.7),
+                        source_type="document_analysis",
+                        matiere=rel.get("matiere", doc.matiere),
+                        canonical_name=f"{rel['source']}_prereq_{rel['target']}",
+                        context=json.dumps({"document_id": doc.id}),
+                    )
+                    total_edges += 1
+
+                total_docs_analyzed += 1
+            except Exception as e:
+                logger.error(f"Erreur analyse document {doc.id}: {e}")
+                continue
+
+        db.commit()
+        logger.info(f"Graphe global: {total_docs_analyzed} docs, {total_edges} aretes")
+        return {"status": "done", "docs_analyzed": total_docs_analyzed, "edges_added": total_edges}
+
+    except Exception as e:
+        logger.error(f"Global graph extraction failed: {e}", exc_info=True)
+        raise self.retry(exc=e, countdown=120)
+    finally:
+        db.close()
+
+
+# -------------------------------------------------------------------
+# Task: Validate/correct a global graph edge (admin action)
+# -------------------------------------------------------------------
+@celery_app.task(name="memory.tasks.validate_global_graph_edge", queue="default", bind=True)
+def validate_global_graph_edge_task(self, edge_id: str, is_valid: bool, corrected_relation: str = None):
+    """Validation manuelle d'une arete du graphe global."""
+    db = _get_db()
+    try:
+        from sqlalchemy import text
+
+        if not is_valid:
+            db.execute(text("DELETE FROM concept_graph WHERE id = :eid AND user_id IS NULL"), {"eid": edge_id})
+            action = "deleted"
+        elif corrected_relation:
+            db.execute(text("UPDATE concept_graph SET relation = :rel, confidence = 1.0, source_type = 'human_validated' WHERE id = :eid AND user_id IS NULL"), {"eid": edge_id, "rel": corrected_relation})
+            action = "corrected"
+        else:
+            db.execute(text("UPDATE concept_graph SET confidence = LEAST(confidence + 0.2, 1.0), source_type = 'human_validated' WHERE id = :eid AND user_id IS NULL"), {"eid": edge_id})
+            action = "validated"
+
+        db.commit()
+        return {"action": action, "edge_id": edge_id}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Validation failed: {e}")
+        raise self.retry(exc=e, countdown=60)
+    finally:
+        db.close()
+
+
+# -------------------------------------------------------------------
+# Task: Cleanup stale concept edges (low confidence, old)
+# -------------------------------------------------------------------
+@celery_app.task(name="memory.tasks.cleanup_stale_concept_edges", queue="cron", bind=True)
+def cleanup_stale_concept_edges(self, days_to_keep: int = 90):
+    """Supprime les aretes personnelles avec confiance faible et anciennes."""
+    db = _get_db()
+    try:
+        from sqlalchemy import text
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
+        result = db.execute(
+            text("""
+                DELETE FROM concept_graph
+                WHERE user_id IS NOT NULL
+                  AND confidence < 0.4
+                  AND source_type IN ('chat', 'inference')
+                  AND created_at < :cutoff
+            """),
+            {"cutoff": cutoff},
+        )
+        db.commit()
+        logger.info(f"Cleanup concept edges: {result.rowcount} stale edges removed")
+        return {"deleted": result.rowcount}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Cleanup concept edges failed: {e}")
+        db.rollback()
+        raise self.retry(exc=e, countdown=3600)
+    finally:
+        db.close()
+
+
+# -------------------------------------------------------------------
+# Task: Extract concepts from chat -> enrich concept_graph
+# -------------------------------------------------------------------
+@celery_app.task(
+    name="memory.tasks.extract_concepts_from_chat",
+    queue="heavy",
+    bind=True,
+    max_retries=2,
+)
+def extract_concepts_from_chat_task(
+    self, message_id: int, user_id: str, user_message: str, llm_response: str
+):
+    """Extrait entites et relations d'un echange chat -> enrichit le graphe cognitif."""
+    db = _get_db()
+    try:
+        import json
+        from app.modules.memory.services.concept_graph_service import ConceptGraphService
+        from app.modules.skills.utils.llm_client import LLMClient, LLMProvider
+        from app.core.config import OPENROUTER_API_KEYS
+
+        prompt = f"""Extrais les concepts educatifs et leurs relations de cet echange pedagogique.
+Retourne UNIQUEMENT un JSON valide avec cette structure :
+
+[
+  {{"concept": "derivees", "matiere": "Mathematiques", "type": "notion"}},
+  {{"source": "limites", "target": "derivees", "relation": "PRE_REQUIS_DE", "confidence": 0.9, "matiere": "Mathematiques"}}
+]
+
+Message utilisateur : {user_message[:500]}
+Reponse IA : {llm_response[:1000]}
+"""
+        api_keys = {"openrouter_api_keys": [k for k in OPENROUTER_API_KEYS if k]}
+        client = LLMClient(api_keys, default_provider=LLMProvider.OPENROUTER)
+        response = client.generate(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=1000,
+            response_format="json",
+        )
+
+        text = response.get("text", "").strip()
+        if text.startswith("```"):
+            text = text.split("```", 2)[-2].strip()
+            if text.startswith("json"):
+                text = text[4:].strip()
+
+        extracted = json.loads(text)
+        if not isinstance(extracted, list):
+            return {"success": False, "reason": "invalid_json"}
+
+        graph_svc = ConceptGraphService(db)
+        inserted_concepts = 0
+        inserted_edges = 0
+
+        for item in extracted:
+            if "source" in item and "target" in item:
+                graph_svc.add_edge(
+                    user_id=user_id,
+                    source=item["source"],
+                    target=item["target"],
+                    relation=item.get("relation", "LIEN_FAIBLE"),
+                    confidence=item.get("confidence", 0.5),
+                    source_type="chat",
+                    matiere=item.get("matiere"),
+                    canonical_name=f"{item['source']}_prereq_{item['target']}",
+                    context=json.dumps({"message_id": message_id}),
+                )
+                inserted_edges += 1
+            elif "concept" in item:
+                graph_svc.add_edge(
+                    user_id=user_id,
+                    source=item["concept"],
+                    target=item["concept"],
+                    relation="EN_COURS",
+                    confidence=0.3,
+                    source_type="chat",
+                    matiere=item.get("matiere"),
+                    canonical_name=item["concept"],
+                    context=json.dumps({"message_id": message_id}),
+                )
+                inserted_concepts += 1
+
+        db.commit()
+        return {"success": True, "concepts": inserted_concepts, "edges": inserted_edges}
+
+    except Exception as e:
+        logger.error(f"Extraction concepts failed: {e}", exc_info=True)
+        raise self.retry(exc=e, countdown=300)
+    finally:
+        db.close()

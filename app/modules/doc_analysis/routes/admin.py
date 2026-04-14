@@ -13,12 +13,7 @@ router = APIRouter(prefix="/admin/doc-analysis", tags=["Admin - Document Analysi
 
 
 def _require_superadmin(current_user: User):
-    """Check that the current user is a superadmin.
-    
-    NOTE: Disabled for development phase - any user can access.
-    """
-    # DEV MODE: Allow any user
-    return
+    """Check that the current user is a superadmin."""
     if current_user.role != "superadmin":
         raise HTTPException(status_code=403, detail="SUPERADMIN_REQUIRED")
 

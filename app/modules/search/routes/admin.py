@@ -21,12 +21,10 @@ router = APIRouter(prefix="/admin/search", tags=["Admin - Search Analytics"])
 
 
 def _check_admin(current_user: User):
-    """Check if user is admin.
-    
-    NOTE: Disabled for development phase - any user can access.
-    """
-    # DEV MODE: Allow any user
-    return
+    """Check if user is admin or superadmin."""
+    if current_user.role not in ("admin", "superadmin"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="INSUFFICIENT_PERMISSIONS")
 
 
 @router.get("/analytics", response_model=SearchAnalyticsResponse)

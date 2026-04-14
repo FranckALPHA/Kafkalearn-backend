@@ -81,26 +81,22 @@ def generate_fiche_pdf_task(
 
 @celery_app.task(name="skills.tasks.enrich_profile_after_skill", queue="default", bind=True, max_retries=3)
 def enrich_profile_after_skill_task(
-    self, user_id: str, skill_type: str, matiere: str, succes: bool, score: float = None
+    self, user_id: str, skill_type: str, matiere: str, succes: bool, score: float = None, lacune_notion: str = None
 ):
     """Enrichit le profil apprenant après une exécution de skill."""
     db = _get_db()
     try:
         from app.modules.users.services.learning_profile_service import LearningProfileService
 
-        LearningProfileService(db).enregistrer_skill_usage(
-            user_id=user_id,
-            skill_type=skill_type,
-            matiere=matiere,
-            succes=succes,
-        )
+        profile_service = LearningProfileService(db)
 
-        # Si quiz avec score → mise à jour score par matière
+        # Si quiz avec score → mise à jour score par matière et lacunes
         if skill_type == "quiz" and score is not None and matiere:
-            LearningProfileService(db).enregistrer_score_quiz(
+            profile_service.enregistrer_score_quiz(
                 user_id=user_id,
                 matiere=matiere,
                 score=score,
+                lacune_notion=lacune_notion,
             )
     except Exception as e:
         logger.error(f"Erreur enrich_profile user {user_id}: {e}")

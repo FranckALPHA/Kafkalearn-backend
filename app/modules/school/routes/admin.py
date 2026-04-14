@@ -22,12 +22,7 @@ router = APIRouter(prefix="/admin/school", tags=["Admin School"])
 
 
 def require_superadmin(current_user=Depends(get_current_user)):
-    """Check if user is superadmin.
-    
-    NOTE: Disabled for development phase - any user can access.
-    """
-    # DEV MODE: Allow any user
-    return current_user
+    """Check if user is superadmin."""
     if getattr(current_user, "role", None) != "superadmin":
         raise HTTPException(status_code=403, detail="SUPERADMIN_REQUIRED")
     return current_user

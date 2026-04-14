@@ -68,7 +68,8 @@ async def get_optional_user(
 
 def get_search_orchestrator(db: Session = Depends(get_db)):
     from app.modules.search.services.search_orchestrator import SearchOrchestrator
-    return SearchOrchestrator(db=db)
+    from app.core.config import VESPA_URL
+    return SearchOrchestrator(db=db, vespa_endpoint=VESPA_URL)
 
 
 def get_analytics_service(db: Session = Depends(get_db)):

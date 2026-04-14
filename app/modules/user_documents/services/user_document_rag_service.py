@@ -19,12 +19,7 @@ class UserDocumentRAGService(UserDocumentsBaseService):
         top_k: int = 5,
     ) -> dict:
         """Get RAG context for a skill query against a user document.
-
-        Steps:
-        1. Check ownership and RAG readiness
-        2. Increment utilisation counter
-        3. If vectorized, return vectoriel mode chunks (placeholder)
-        4. Else return textuel mode with truncated text
+        Enrichit automatiquement le graphe cognitif avec les notions du document.
         """
         doc = (
             self.db.query(UserDocument)
@@ -51,6 +46,9 @@ class UserDocumentRAGService(UserDocumentsBaseService):
         from datetime import datetime, timezone
         doc.derniere_utilisation_at = datetime.now(timezone.utc)
         self.db.commit()
+
+        # Enrichir le graphe cognitif avec les notions du document
+        self._enrichir_graphe_cognitif(user_id, doc)
 
         # Return context based on vectorization status
         if doc.is_vectorized and doc.vectorization_status == "complete":
@@ -104,6 +102,48 @@ class UserDocumentRAGService(UserDocumentsBaseService):
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _enrichir_graphe_cognitif(self, user_id, doc: UserDocument):
+        """
+        Enrichit le concept_graph avec les notions du document personnel.
+        Quand un utilisateur utilise un document, on marque les notions comme EN_COURS.
+        """
+        try:
+            from app.modules.memory.services.concept_graph_service import ConceptGraphService
+
+            graph_svc = ConceptGraphService(self.db)
+            matiere = doc.matiere or "general"
+
+            # Extraire les notions depuis le titre ou les tags
+            titre = doc.titre or ""
+            tags = doc.tags or []
+
+            # Notions candidates
+            notions = set()
+            # Depuis les tags
+            for tag in tags:
+                if isinstance(tag, str) and len(tag) > 2:
+                    notions.add(tag.lower())
+            # Depuis le titre (mots significatifs)
+            for word in titre.split():
+                if len(word) > 3 and word.lower() not in ("cours", "lecon", "note", "resume", "chapitre"):
+                    notions.add(word.lower().strip(".,;:()[]{}\"'"))
+
+            for notion in notions:
+                graph_svc.add_edge(
+                    user_id=str(user_id),
+                    source=notion,
+                    target=notion,
+                    relation="EN_COURS",
+                    confidence=0.3,  # Faible confiance car déduit du titre
+                    source_type="user_document",
+                    matiere=matiere,
+                    canonical_name=notion,
+                    context=f"document_id={doc.id}, titre={titre[:50]}",
+                )
+        except Exception as e:
+            logger.warning(f"Failed to enrich cognitive graph from user doc: {e}")
+
     def _obtenir_contexte_vectoriel(
         self,
         doc: UserDocument,

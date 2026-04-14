@@ -73,13 +73,15 @@ class SearchSuggestionService(SearchBaseService):
 
     async def _generer_suggestions_from_profile(self, user_id: str) -> List[str]:
         """
-        Génère des suggestions basées sur l'historique et les matières fréquentes.
-        Enrichi avec le profil d'apprentissage et les lacunes détectées.
+        Génère des suggestions basées sur l'historique, les lacunes et les tendances.
+        Priorité : (1) recherches perso → (2) lacunes (depuis concept_graph) → (3) populaires globales → (4) défaut.
         """
         from uuid import UUID
         user_uuid = UUID(user_id)
 
-        # Recherches populaires de l'utilisateur
+        MAX_SUGGESTIONS = 10
+
+        # 1. Recherches récentes de l'utilisateur
         user_top = (
             self.db.query(SearchLog.texte_requete)
             .filter(SearchLog.user_id == user_uuid)
@@ -88,39 +90,50 @@ class SearchSuggestionService(SearchBaseService):
             .all()
         )
 
-        # Requêtes populaires globales (fallback)
-        global_top = (
-            self.db.query(SearchLog.texte_requete)
-            .filter(SearchLog.created_at >= datetime.utcnow() - timedelta(days=7))
-            .group_by(SearchLog.texte_requete)
-            .order_by(func.count(SearchLog.id).desc())
-            .limit(10)
-            .all()
-        )
-
         suggestions = [r[0] for r in user_top]
-        for r in global_top:
-            if r[0] not in suggestions and len(suggestions) < 10:
-                suggestions.append(r[0])
+        seen = set(suggestions)
 
-        # Enrichissement via les lacunes du profil utilisateur
+        # 2. Lacunes depuis le graphe cognitif (concept_graph)
+        lacune_tips = []
         try:
-            from app.modules.users.models import UserLearningProfile
-            profile = (
-                self.db.query(UserLearningProfile)
-                .filter(UserLearningProfile.user_id == user_uuid)
-                .first()
-            )
-            if profile and profile.lacunes:
-                for matiere, notions in list(profile.lacunes.items())[:2]:
-                    for notion in notions[:1]:
-                        tip = f"Révise les {notion} en {matiere}"
-                        if tip not in suggestions and len(suggestions) < 10:
-                            suggestions.append(tip)
-        except Exception:
-            pass  # Profil non disponible
+            from app.modules.memory.services.concept_graph_service import ConceptGraphService
+            graph_svc = ConceptGraphService(self.db)
+            lacunes = graph_svc.get_concepts_lacunes(user_id)
 
-        # Suggestions par défaut si vide
+            if lacunes:
+                for matiere, notions in list(lacunes.items())[:2]:
+                    for notion in notions[:2]:
+                        if notion == "general":
+                            tip = f"Exercices de révision en {matiere}"
+                        else:
+                            tip = f"Révise {notion} en {matiere}"
+                        if tip not in seen:
+                            lacune_tips.append(tip)
+                            seen.add(tip)
+        except Exception:
+            pass  # Graphe non disponible ou erreur non critique
+
+        # Ajouter les lacunes après les recherches perso
+        suggestions.extend(lacune_tips)
+
+        # 3. Requêtes populaires globales (pour remplir les slots restants)
+        if len(suggestions) < MAX_SUGGESTIONS:
+            global_top = (
+                self.db.query(SearchLog.texte_requete)
+                .filter(SearchLog.created_at >= datetime.utcnow() - timedelta(days=7))
+                .group_by(SearchLog.texte_requete)
+                .order_by(func.count(SearchLog.id).desc())
+                .limit(MAX_SUGGESTIONS)
+                .all()
+            )
+            for r in global_top:
+                if r[0] not in seen and len(suggestions) >= MAX_SUGGESTIONS:
+                    break
+                if r[0] not in seen:
+                    suggestions.append(r[0])
+                    seen.add(r[0])
+
+        # 4. Suggestions par défaut si toujours vide
         if not suggestions:
             suggestions = [
                 "Explique les dérivées en Mathématiques",
@@ -130,4 +143,4 @@ class SearchSuggestionService(SearchBaseService):
                 "Cours complet sur les intégrales",
             ]
 
-        return suggestions[:10]
+        return suggestions[:MAX_SUGGESTIONS]

@@ -39,16 +39,35 @@ router = APIRouter(prefix="/search", tags=["Search"])
     "/rechercher",
     response_model=SearchResponse,
     dependencies=[Depends(get_rate_limiter_dependency(search_rate_limiter))],
+    summary="Recherche hybride sémantique + lexicale",
+    description="""
+**Recherche hybride combinant recherche vectorielle (Vespa) et lexicale (Meilisearch).**
+
+**Fonctionnement :**
+1. Analyse l'intention de la requête (explication, entraînement, révision...)
+2. Recherche vectorielle ANN via Vespa (similarité sémantique)
+3. Recherche lexicale BM25 via Meilisearch (mots-clés exacts)
+4. Fusion et reclassement des résultats (RRF)
+5. Optionnel : génère une réponse IA basée sur les chunks trouvés
+
+**Filtres disponibles :** `matiere`, `niveau`, `serie`, `annee`, `type_doc`
+
+**Paramètres :**
+- `texte` : la requête de recherche (min 3 caractères)
+- `top_k` : nombre de résultats (1-50, défaut: 10)
+- `avec_ia` : générer une réponse IA (défaut: false)
+- `mode_ia` : type de réponse IA (`reponse`, `resume`, `exercices_similaires`)
+- `poids_semantique` : poids de la recherche vectorielle vs lexicale (0.0-1.0, défaut: 0.7)
+
+**Rate limit :** 10 requêtes/minute par utilisateur.
+    """,
 )
 async def rechercher(
     payload: SearchRequest,
     current_user: User = Depends(get_current_user),
     orchestrator=Depends(get_search_orchestrator),
 ):
-    """
-    Recherche hybride principale avec réponse IA optionnelle.
-    Rate limited: 10 req/min par utilisateur.
-    """
+    """Hybrid search: vector + lexical + optional AI response."""
     return await orchestrator.rechercher(user=current_user, payload=payload)
 
 
@@ -56,16 +75,25 @@ async def rechercher(
     "/suggestions",
     response_model=SuggestionResponse,
     dependencies=[Depends(get_rate_limiter_dependency(suggestion_rate_limiter))],
+    summary="Suggestions de recherche personnalisées",
+    description="""
+**Suggestions de recherche personnalisées basées sur le profil de l'utilisateur.**
+
+**Ce que retourne l'endpoint :**
+- Les 5 dernières recherches de l'utilisateur
+- Les lacunes détectées (ex: "Révise derivees en Mathematiques")
+- Les requêtes populaires globales pour compléter
+
+**Les suggestions sont mises en cache 24h** — le cache est recalculé automatiquement.
+
+**Rate limit :** 5 requêtes/minute.
+    """,
 )
 async def get_suggestions(
     current_user: User = Depends(get_current_user),
     suggestion_service=Depends(get_suggestion_service),
 ):
-    """
-    Suggestions de recherche personnalisées basées sur le profil apprenant.
-    Résultat mis en cache Redis 24h.
-    Rate limited: 5 req/min.
-    """
+    """Personalized search suggestions based on user profile and gaps."""
     return await suggestion_service.generer_suggestions(user_id=str(current_user.id))
 
 

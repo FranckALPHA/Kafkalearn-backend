@@ -155,11 +155,19 @@ def generate_pdf_report_task(self, user_id: str, report_id: int, declencheur: st
             story.append(Paragraph(llm_summary["resume_narratif"], styles['BodyText']))
             story.append(Spacer(1, 3*mm))
 
-        # Lacunes détectées
-        if profile and profile.lacunes:
+        # Lacunes détectées (depuis le graphe cognitif)
+        lacunes = {}
+        try:
+            from app.modules.memory.services.concept_graph_service import ConceptGraphService
+            graph_svc = ConceptGraphService(db)
+            lacunes = graph_svc.get_concepts_lacunes(user_id)
+        except Exception:
+            pass
+
+        if lacunes:
             story.append(Paragraph("Lacunes Identifiées", styles['SectionHeader']))
             lacunes_data = [(["Matière", "Notions à renforcer"])]
-            for matiere, notions in profile.lacunes.items():
+            for matiere, notions in lacunes.items():
                 if isinstance(notions, list):
                     lacunes_data.append([matiere, ", ".join(notions)])
                 else:
@@ -180,12 +188,18 @@ def generate_pdf_report_task(self, user_id: str, report_id: int, declencheur: st
             story.append(lacunes_table)
             story.append(Spacer(1, 3*mm))
 
-        # Forces
-        if profile and profile.forces:
+        # Forces (depuis le graphe cognitif)
+        maitrises = {}
+        try:
+            maitrises = graph_svc.get_concepts_maitrises(user_id)
+        except Exception:
+            pass
+
+        if maitrises:
             story.append(Paragraph("Forces de l'Élève", styles['SectionHeader']))
-            forces_data = [(["Matière", "Niveau"])]
-            for matiere, niveau in profile.forces.items():
-                forces_data.append([matiere, str(niveau)])
+            forces_data = [(["Matière", "Confiance"])]
+            for matiere, score in maitrises.items():
+                forces_data.append([matiere, f"{score:.0%}"])
 
             forces_table = Table(forces_data, colWidths=[60*mm, 110*mm])
             forces_table.setStyle(TableStyle([
@@ -282,16 +296,22 @@ Classe: {user.classe or 'Non renseignée'}
 Série: {user.serie or 'Non renseignée'}
 """
             if profile:
-                lacunes = json.dumps(profile.lacunes, ensure_ascii=False) if profile.lacunes else "Aucune"
-                forces = json.dumps(profile.forces, ensure_ascii=False) if profile.forces else "Aucune"
-                skills = json.dumps(profile.skills_utilises, ensure_ascii=False) if profile.skills_utilises else "Aucun"
-                scores = json.dumps(profile.score_par_matiere, ensure_ascii=False) if profile.score_par_matiere else "Aucun"
+                # Lacunes et forces depuis le graphe cognitif
+                try:
+                    from app.modules.memory.services.concept_graph_service import ConceptGraphService
+                    graph_svc = ConceptGraphService(db)
+                    lacunes = graph_svc.get_concepts_lacunes(user_id)
+                    maitrises = graph_svc.get_concepts_maitrises(user_id)
+                except Exception:
+                    lacunes = {}
+                    maitrises = {}
+
+                lacunes_str = json.dumps(lacunes, ensure_ascii=False) if lacunes else "Aucune"
+                forces_str = json.dumps(maitrises, ensure_ascii=False) if maitrises else "Aucune"
 
                 profile_summary += f"""
-Lacunes identifiées: {lacunes}
-Forces: {forces}
-Skills utilisés: {skills}
-Scores par matière: {scores}
+Lacunes identifiées: {lacunes_str}
+Forces: {forces_str}
 """
             # Configurer Gemini
             genai.configure(api_key=settings.GEMINI_API_KEY)

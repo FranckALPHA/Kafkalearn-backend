@@ -1,7 +1,7 @@
 """
 services/base_skill.py
 ======================
-Classe abstraite commune à tous les skills.
+Classe abstraite commune à tous les skills. Bilingue FR/EN.
 """
 import logging
 from abc import ABC, abstractmethod
@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from app.modules.skills.utils.llm_client import LLMClient
 from app.modules.search.services.search_orchestrator import SearchOrchestrator
+from app.core.utils.i18n import t, SKILL_SYSTEM_PROMPTS
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ class SkillRequest(BaseModel):
     avec_rag: bool = True
     user_document_id: Optional[int] = None
     historique_session: List[Dict[str, str]] = []  # derniers messages
-    
+
 class SkillResult(BaseModel):
     """Résultat standardisé d'un skill."""
     success: bool
@@ -40,10 +41,10 @@ class SkillResult(BaseModel):
 
 class BaseSkill(ABC):
     """
-    Contrat commun à tous les skills.
+    Contrat commun à tous les skills. Bilingue FR/EN.
     Fournit les utilitaires partagés : LLM, RAG, logging.
     """
-    
+
     def __init__(self, db, redis, llm_client: LLMClient):
         self.db = db
         self.redis = redis
@@ -68,20 +69,17 @@ class BaseSkill(ABC):
         response_format: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Wrapper unifié pour tous les appels LLM des skills.
+        Wrapper unifié pour tous les appels LLM des skills. Bilingue FR/EN.
         """
-        # Construction des messages avec historique
         messages = []
-        for msg in (historique or [])[-10:]:  # max 10 derniers
+        for msg in (historique or [])[-10:]:
             messages.append({"role": msg["role"], "content": msg["content"]})
         messages.append({"role": "user", "content": prompt})
-        
-        # Adaptation du system prompt à la langue
-        if langue == 'fr':
-            system_instruction = f"[FR] {system_instruction}\nRéponds en français."
-        else:
-            system_instruction = f"[EN] {system_instruction}\nRespond in English."
-        
+
+        # Suffixe langue sur le system prompt
+        lang_suffix = "\nRéponds en français." if langue == 'fr' else "\nRespond in English."
+        system_instruction = f"{system_instruction}{lang_suffix}"
+
         return await self.llm_client.generate(
             messages=messages,
             system_instruction=system_instruction,
@@ -89,6 +87,10 @@ class BaseSkill(ABC):
             max_tokens=4000,
             response_format=response_format
         )
+
+    def get_system_prompt(self, skill_type: str, langue: str = 'fr') -> str:
+        """Retourne le system prompt bilingue pour un type de skill."""
+        return t(SKILL_SYSTEM_PROMPTS.get(skill_type, {}), langue, default_langue='fr')
     
     async def charger_contexte_rag(
         self,

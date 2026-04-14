@@ -249,6 +249,21 @@ class IngestService(IngestBaseService):
                 except Exception as exc:
                     logger.warning(f"MetadataQueueService failed: {exc}")
 
+            # 13. Auto-generate memory items (flashcards, QCM) from document text
+            if texte_extrait and len(texte_extrait) > 100:
+                try:
+                    from app.modules.memory.jobs.tasks import generate_memory_items_task
+                    section_title = metadata.get("notion_principale", "Contenu principal") if metadata else "Contenu principal"
+                    generate_memory_items_task.delay(
+                        document_id=doc_id,
+                        section_title=section_title,
+                        texte_section=texte_extrait[:5000],
+                        langue=metadata.get("langue", "fr") if metadata else "fr",
+                    )
+                    logger.info(f"Memory generation task queued for doc {doc_id}")
+                except Exception as exc:
+                    logger.warning(f"Memory generation queue failed for doc {doc_id}: {exc}")
+
             # Update job success
             job.nb_traites = 1
             job.nb_succes = 1

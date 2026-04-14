@@ -72,7 +72,7 @@ class UserDocument(Base, TimestampMixin):
             name="ck_user_documents_poids_octets"
         ),
         CheckConstraint(
-            "nb_pages > 0",
+            "nb_pages IS NULL OR nb_pages > 0",
             name="ck_user_documents_nb_pages"
         ),
         CheckConstraint(

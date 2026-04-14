@@ -55,7 +55,7 @@ def vectorize_document_task(self, document_id: int):
             logger.error("Document %s not found for vectorization", document_id)
             return {"status": "error", "message": "DOCUMENT_NOT_FOUND"}
 
-        if not doc.contenu_extrait:
+        if not doc.extracted_text:
             logger.warning("Document %s has no extracted text", document_id)
             doc.vectorization_status = "failed"
             db.commit()
@@ -67,7 +67,7 @@ def vectorize_document_task(self, document_id: int):
 
         # Chunking: split text into segments of ~500 tokens (~2000 chars)
         chunk_size = 2000
-        text_chunks = textwrap.wrap(doc.contenu_extrait, width=chunk_size)
+        text_chunks = textwrap.wrap(doc.extracted_text, width=chunk_size)
 
         if not text_chunks:
             logger.warning("Document %s produced no chunks", document_id)
@@ -90,9 +90,8 @@ def vectorize_document_task(self, document_id: int):
             chunk = UserDocumentChunk(
                 document_id=document_id,
                 user_id=doc.user_id,
-                chunk_index=idx,
-                contenu=chunk_text.strip(),
-                vecteur=embedding.tolist(),
+                chunk_idx=idx,
+                texte_chunk=chunk_text.strip(),
                 is_embedded=True,
             )
             db.add(chunk)

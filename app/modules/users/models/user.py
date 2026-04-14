@@ -136,6 +136,21 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         lazy="dynamic",
         cascade="all, delete-orphan",
     )
+    concept_edges = relationship(
+        "ConceptGraph",
+        back_populates="user",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+        viewonly=True,
+    )
+    learning_signals = relationship(
+        "UserLearningSignals", uselist=False, back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    feedback_entries = relationship(
+        "UserFeedback", back_populates="user", lazy="dynamic",
+        cascade="all, delete-orphan"
+    )
     # ─── Cross-module relations (configured at end of file) ─────
     # documents, playlists, document_views, wisdom_interactions
 
@@ -158,14 +173,25 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
             "id": str(self.id),
             "email": self.email,
             "prenom": self.prenom,
+            "nom": self.nom,
+            "phone": self.phone,
+            "region": self.region,
+            "etablissement": self.etablissement,
+            "langue": self.langue,
             "photo_url": self.photo_url,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
             "plan_effectif": self.plan_effectif,
             "classe": self.classe,
             "serie": self.serie,
             "email_verified": self.email_verified,
             "onboarding_completed": self.onboarding_completed,
             "streak_jours": self.streak_jours,
+            "streak_max": self.streak_max,
             "score_global": self.score_global,
+            "total_sessions_etude": self.total_sessions_etude,
+            "total_heures_etude": self.total_heures_etude,
+            "nb_quiz_reussis": self.nb_quiz_reussis,
             "school_id": str(self.school_id) if self.school_id else None,
             "needs_onboarding": self.needs_onboarding,
         }

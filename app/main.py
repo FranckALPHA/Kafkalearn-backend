@@ -7,7 +7,7 @@ Point d'entrée de l'API FastAPI - KafkaLearn Backend.
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +19,14 @@ from app.core.database_init import init_db
 # Initialisation de la BDD si demandé
 if AUTO_CREATE_DB:
     init_db()
+
+# Création du superadmin par défaut si il n'existe pas
+try:
+    from app.core.scripts.create_superadmin import create_superadmin
+    create_superadmin()
+except Exception as e:
+    from app.core.config import SUPERADMIN_EMAIL
+    print(f"[WARN] Superadmin non créé : {e}")
 
 app = FastAPI(
     title="KafkaLearn Backend",

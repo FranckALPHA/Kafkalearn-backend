@@ -46,6 +46,15 @@ class AnalysisFeedbackService(DocAnalysisBaseService):
             existing_feedback.section_problematique = section_problematique
             existing_feedback.commentaire = commentaire
             existing_feedback.updated_at = datetime.utcnow()
+            
+            # Update counts if the feedback value changed
+            if existing_feedback.est_utile != est_utile:
+                if est_utile:
+                    analysis.feedback_utile += 1
+                    analysis.feedback_pas_utile -= 1
+                else:
+                    analysis.feedback_pas_utile += 1
+                    analysis.feedback_utile -= 1
         else:
             new_feedback = AnalysisFeedback(
                 analysis_id=analysis_id,
@@ -55,23 +64,12 @@ class AnalysisFeedbackService(DocAnalysisBaseService):
                 commentaire=commentaire,
             )
             self.db.add(new_feedback)
-
-        total_feedback = analysis.feedback_utile + analysis.feedback_pas_utile
-        if est_utile:
-            if not existing_feedback or not existing_feedback.est_utile:
+            
+            # Increment the appropriate counter for new feedback
+            if est_utile:
                 analysis.feedback_utile += 1
-        else:
-            if not existing_feedback or existing_feedback.est_utile:
+            else:
                 analysis.feedback_pas_utile += 1
-
-        if existing_feedback:
-            if existing_feedback.est_utile != est_utile:
-                if est_utile:
-                    analysis.feedback_utile += 1
-                    analysis.feedback_pas_utile -= 1
-                else:
-                    analysis.feedback_pas_utile += 1
-                    analysis.feedback_utile -= 1
 
         self.db.commit()
         self.db.refresh(analysis)

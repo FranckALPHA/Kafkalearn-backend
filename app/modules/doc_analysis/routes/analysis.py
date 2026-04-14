@@ -101,11 +101,7 @@ async def refresh_analysis(
     current_user: User = Depends(get_current_user),
     analysis_service=Depends(get_analysis_service),
 ):
-    """Force regeneration of analysis (premium+ only, 1/24h rate limit)."""
-    user_plan = getattr(current_user, "plan_effectif", "freemium")
-    if PLAN_HIERARCHY.index(user_plan) < PLAN_HIERARCHY.index("premium"):
-        raise HTTPException(status_code=403, detail="PREMIUM_REQUIRED")
-
+    """Force regeneration of analysis (tous plans, 1/24h rate limit)."""
     try:
         result = await analysis_service.forcer_regeneration(
             document_id=document_id,

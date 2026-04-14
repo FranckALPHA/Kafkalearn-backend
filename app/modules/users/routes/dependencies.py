@@ -86,11 +86,7 @@ async def get_current_superadmin(
     current_user: User = Depends(get_current_user),
 ) -> User:
     """Vérifie que l'utilisateur est superadmin.
-    
-    NOTE: Disabled for development phase - any user can access admin routes.
     """
-    # DEV MODE: Allow any authenticated user
-    return current_user
     if current_user.role not in ("superadmin", "admin"):
         raise HTTPException(status_code=403, detail="INSUFFICIENT_PERMISSIONS")
     return current_user

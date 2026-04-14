@@ -24,7 +24,7 @@ class MeilisearchService(SearchBaseService):
     def __init__(self, db: Session, redis=None):
         super().__init__(db, redis)
         self.client = meilisearch.Client(MEILI_URL, MEILI_MASTER_KEY)
-        self.index_name = "epreuves"  # Index principal
+        self.index_name = "epreuves_textes"  # Index principal
 
     async def search(self, payload) -> Dict[str, Any]:
         """

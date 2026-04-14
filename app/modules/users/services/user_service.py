@@ -5,6 +5,7 @@ Service principal pour l'authentification et la gestion des utilisateurs.
 """
 import logging
 import secrets
+import hashlib
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
@@ -36,6 +37,11 @@ logger = logging.getLogger(__name__)
 
 class UserService(BaseService):
     """Service pour l'inscription, l'authentification et la gestion des utilisateurs."""
+
+    @staticmethod
+    def _hash_refresh_token(token: str) -> str:
+        """Hash SHA-256 du refresh token pour stockage DB."""
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
     def inscrire_utilisateur(
         self,
@@ -182,7 +188,7 @@ class UserService(BaseService):
         rt_record = RefreshToken(
             user_id=user.id,
             token_jti=jti,
-            token_hash=refresh_token,  # Store full token for simplicity
+            token_hash=self._hash_refresh_token(refresh_token),
             fingerprint="otp-verification",
             expires_at=datetime.utcnow() + timedelta(days=30),
             revoked=False,
@@ -250,7 +256,7 @@ class UserService(BaseService):
         rt_record = RefreshToken(
             user_id=user.id,
             token_jti=jti,
-            token_hash=refresh_token,
+            token_hash=self._hash_refresh_token(refresh_token),
             fingerprint=fingerprint,
             expires_at=datetime.utcnow() + timedelta(days=30),
             revoked=False,
@@ -535,7 +541,7 @@ class UserService(BaseService):
         new_rt_record = RefreshToken(
             user_id=user.id,
             token_jti=new_jti,
-            token_hash=new_refresh_token,
+            token_hash=self._hash_refresh_token(new_refresh_token),
             fingerprint=fingerprint,
             expires_at=datetime.utcnow() + timedelta(days=30),
             revoked=False,

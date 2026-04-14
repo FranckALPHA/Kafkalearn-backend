@@ -51,3 +51,7 @@ def get_scheduler_service(db: Session = Depends(get_db)):
 def get_stats_service(db: Session = Depends(get_db)):
     from app.modules.memory.services.memory_stats_service import MemoryStatsService
     return MemoryStatsService(db=db)
+
+def get_concept_graph_service(db: Session = Depends(get_db)):
+    from app.modules.memory.services.concept_graph_service import ConceptGraphService
+    return ConceptGraphService(db=db)

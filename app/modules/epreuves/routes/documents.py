@@ -116,7 +116,7 @@ async def get_recommended_documents(
     limit: int = Query(10, ge=1, le=20),
     recommendation_engine=Depends(get_recommendation_engine),
 ):
-    recs = await recommendation_engine.recommander_mix(user_id=str(current_user.id), limit=limit)
+    recs = recommendation_engine.recommander_mix(user_id=str(current_user.id), limit=limit)
     return {"recommandations": recs}
 
 

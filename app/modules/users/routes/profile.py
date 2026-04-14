@@ -48,9 +48,9 @@ async def update_my_profile(
     user_service=Depends(get_user_service),
 ):
     """Met à jour les informations du profil."""
-    await user_service.mettre_a_jour_profil(
+    user_service.mettre_a_jour_profil(
         user_id=str(current_user.id),
-        payload_dict=payload.model_dump(exclude_unset=True),
+        payload=payload.model_dump(exclude_unset=True),
     )
     return MessageResponse(message="Profil mis à jour", code="PROFILE_UPDATED")
 
@@ -65,9 +65,9 @@ async def complete_onboarding(
     Complète l'onboarding : classe, série, langue, préférences.
     Une seule fois (après, contact support pour modification).
     """
-    await user_service.mettre_a_jour_profil(
+    user_service.mettre_a_jour_profil(
         user_id=str(current_user.id),
-        payload_dict={
+        payload={
             "classe": payload.classe,
             "serie": payload.serie,
             "langue": payload.langue,
@@ -112,3 +112,16 @@ async def get_my_activity(
     """Retourne les dernières activités de l'utilisateur."""
     logs = audit_service.get_user_audit_log(user_id=str(current_user.id), limit=limit)
     return {"activities": logs, "total": len(logs)}
+
+
+@router.post("/me/learning-profile/analyze-lacunes", response_model=dict)
+async def analyze_lacunes_retroactif(
+    current_user: User = Depends(get_current_user),
+    profile_service=Depends(get_learning_profile_service),
+):
+    """
+    Analyse rétroactive des lacunes à partir des quiz passés.
+    Utile si le profil n'a jamais été alimenté automatiquement.
+    """
+    result = profile_service.analyser_lacunes_retroactif(user_id=str(current_user.id))
+    return result

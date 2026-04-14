@@ -1,7 +1,18 @@
 """
 routes/skills.py
 ================
-Endpoints principaux pour l'exécution des skills.
+Endpoints principaux pour l'exécution des skills IA.
+
+**Skills disponibles :**
+- `fiche` : Génère une fiche de révision structurée (PDF possible)
+- `quiz` : Génère un quiz interactif avec correction
+- `solver` : Résout un exercice étape par étape
+- `corrige` : Corrige la copie d'un élève
+- `tuteur` : Discussion libre avec un tuteur IA
+- `visualisation` : Génère un graphe/diagramme mathématique
+
+**Détection automatique** : si `skill` n'est pas précisé, l'IA détecte l'intention
+depuis le prompt (ex: "explique les dérivées" → tuteur, "quiz sur les intégrales" → quiz).
 """
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
@@ -49,6 +60,33 @@ def _is_plan_sufficient(user_plan: str, required_plan: str) -> bool:
     "/run",
     response_model=SkillResultResponse,
     dependencies=[Depends(get_rate_limiter_dependency(skills_run_rate_limiter))],
+    summary="Exécuter un skill IA",
+    description="""
+**Point d'entrée principal pour exécuter un skill IA.**
+
+**Skills disponibles :**
+- `fiche` : Fiche de révision structurée (définitions, formules, exemples)
+- `quiz` : Quiz interactif avec questions progressives et correction
+- `solver` : Résolution d'exercice étape par étape
+- `corrige` : Correction de copie d'élève avec feedback
+- `tuteur` : Discussion libre pour expliquer un concept
+- `visualisation` : Graphe/diagramme mathématique
+
+**Détection automatique** : si `skill` n'est pas précisé, l'IA détecte l'intention depuis le prompt.
+
+**Exemple de requête :**
+```json
+{
+  "skill": "quiz",
+  "prompt": "quiz sur les dérivées en Maths Terminale C",
+  "params": { "matiere": "Mathematiques", "niveau": "Tle", "nb_questions": 5 },
+  "langue": "fr",
+  "avec_rag": true
+}
+```
+
+**Rate limit :** 10 requêtes/minute par utilisateur.
+    """,
 )
 async def run_skill(
     payload: SkillRunRequest,
@@ -57,10 +95,7 @@ async def run_skill(
     dispatcher=Depends(get_skill_dispatcher),
     idempotency=Depends(get_idempotency_service),
 ):
-    """
-    Point d'entrée principal pour exécuter un skill.
-    Rate limited: 10 req/min par utilisateur.
-    """
+    """Run a skill: fiche, quiz, solver, corrige, tuteur, or visualisation."""
     # 1. Vérification idempotency
     idempotency_key = idempotency.generer_key_auto(
         user_id=str(current_user.id),
@@ -130,7 +165,7 @@ async def run_skill(
 
         await idempotency.marquer_complete(idempotency_key, result.model_dump())
 
-        # Background: enrichissement profil
+        # Background: enrichissement profil + extraction concepts + contexte
         background = BackgroundTasks()
         background.add_task(
             _enqueue_skill_enrichment,
@@ -138,6 +173,19 @@ async def run_skill(
             skill_type=skill_type,
             matiere=payload.params.get("matiere"),
             succes=result.success,
+        )
+        # Background: extraction des concepts du chat vers le graphe cognitif
+        background.add_task(
+            _enqueue_concept_extraction,
+            user_id=str(current_user.id),
+            user_message=payload.prompt,
+            llm_response=result.content or "",
+        )
+        # Background: détection contexte (urgence, préférences) depuis le message
+        background.add_task(
+            _detect_context_from_chat,
+            user_id=str(current_user.id),
+            message=payload.prompt,
         )
 
         return SkillResultResponse.from_skill_result(
@@ -157,15 +205,33 @@ async def run_skill(
 @router.post(
     "/quiz/{quiz_session_id}/soumettre",
     response_model=QuizCorrectionResponse,
+    summary="Soumettre les réponses d'un quiz",
+    description="""
+**Soumet les réponses d'un quiz et obtient la correction détaillée.**
+
+**Requis :**
+- `quiz_session_id` : l'ID de la session de quiz (retourné par `POST /skills/run`)
+- `reponses` : liste des réponses de l'utilisateur (index des options choisies)
+- `duree_secondes` : temps mis pour répondre (optionnel)
+
+**Ce que retourne l'endpoint :**
+- `score_percent` : score en pourcentage
+- `corrections` : détail question par question (bonne réponse, explication)
+- `lacunes_detectees` : notions où l'utilisateur a échoué (mis à jour dans le graphe cognitif)
+- `lacune_detectee` : la notion principale à réviser
+
+**Effet de bord :** le profil cognitif de l'utilisateur est automatiquement enrichi avec les lacunes détectées.
+    """,
 )
 async def submit_quiz_answers(
     quiz_session_id: str,
     payload: QuizSubmitRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     correction_service=Depends(get_quiz_correction_service),
 ):
-    """Soumission des réponses d'un quiz et obtention de la correction."""
+    """Submit quiz answers → correction + cognitive graph enrichment."""
     from uuid import UUID
 
     quiz_session = (
@@ -187,6 +253,15 @@ async def submit_quiz_answers(
         quiz_session_id=quiz_session_id,
         reponses_utilisateur=payload.reponses,
         duree_secondes=payload.duree_secondes,
+    )
+
+    # Background: enrichir le profil avec les lacunes détectées
+    background_tasks.add_task(
+        _enqueue_quiz_enrichment,
+        user_id=str(current_user.id),
+        matiere=result.get("matiere"),
+        score=result.get("score_percent", 0),
+        lacune_notion=result.get("lacune_detectee"),
     )
 
     return QuizCorrectionResponse(**result)
@@ -265,3 +340,33 @@ def _enqueue_skill_enrichment(user_id: str, skill_type: str, matiere: str, succe
         )
     except Exception as e:
         logger.warning(f"Failed to enqueue skill enrichment: {e}")
+
+
+def _enqueue_quiz_enrichment(user_id: str, matiere: str, score: float, lacune_notion: str = None):
+    """Enqueue quiz correction enrichment task for user profile (lacunes + scores)."""
+    try:
+        from app.modules.skills.jobs.tasks import enrich_profile_after_skill_task
+        enrich_profile_after_skill_task.delay(
+            user_id=user_id,
+            skill_type="quiz",
+            matiere=matiere,
+            succes=score >= 50,
+            score=score,
+            lacune_notion=lacune_notion,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to enqueue quiz enrichment: {e}")
+
+
+def _enqueue_concept_extraction(user_id: str, user_message: str, llm_response: str):
+    """Enqueue concept extraction task for cognitive graph enrichment."""
+    try:
+        from app.modules.memory.jobs.tasks import extract_concepts_from_chat_task
+        extract_concepts_from_chat_task.delay(
+            message_id=0,  # Placeholder — le message_id réel n'est pas critique
+            user_id=user_id,
+            user_message=user_message,
+            llm_response=llm_response,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to enqueue concept extraction: {e}")

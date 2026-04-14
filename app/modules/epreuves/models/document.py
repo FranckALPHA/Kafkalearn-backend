@@ -112,6 +112,7 @@ class Document(Base, TimestampMixin):
             "serie": self.serie,
             "annee": self.annee,
             "type_doc": self.type_doc,
+            "sous_type": self.sous_type,
             "is_embedded": self.is_embedded,
             "is_validated": self.is_validated,
             "nb_vues": self.nb_vues,

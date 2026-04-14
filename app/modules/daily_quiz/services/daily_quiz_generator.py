@@ -133,6 +133,7 @@ class DailyQuizGeneratorService:
 
     def generate_quiz_of_the_day(self, target_date: date = None) -> DailyQuiz:
         """Génère via LLM et enregistre le quiz du jour selon le type déterminé."""
+        import asyncio
         if not target_date:
             target_date = date.today()
 
@@ -153,16 +154,41 @@ class DailyQuizGeneratorService:
 
             api_keys = {"openrouter_api_keys": [k for k in OPENROUTER_API_KEYS if k]}
             client = LLMClient(api_keys, default_provider=LLMProvider.OPENROUTER)
-            response = client.generate(
-                messages=[{"role": "user", "content": prompt}],
-                system_instruction=system_prompt,
-                temperature=0.7,
-                max_tokens=3000,
-                response_format="json",
-            )
 
-            clean_json = response.get("text", "").replace("```json", "").replace("```", "").strip()
+            # Run async LLM call in a separate thread with its own event loop
+            import concurrent.futures
+            def _run_llm():
+                import asyncio as _asyncio
+                loop = _asyncio.new_event_loop()
+                _asyncio.set_event_loop(loop)
+                try:
+                    return loop.run_until_complete(
+                        client.generate(
+                            messages=[{"role": "user", "content": prompt}],
+                            system_instruction=system_prompt,
+                            temperature=0.7,
+                            max_tokens=3000,
+                            response_format="json",
+                        )
+                    )
+                finally:
+                    loop.close()
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                response = executor.submit(_run_llm).result(timeout=180)
+
+            # Debug: log raw response
+            log.info(f"LLM response type: {type(response)}, keys: {response.keys() if isinstance(response, dict) else 'N/A'}")
+            raw_text = response.get("text", "")
+            log.info(f"LLM raw text (first 500 chars): {raw_text[:500]!r}")
+
+            clean_json = raw_text.replace("```json", "").replace("```", "").strip()
+            if not clean_json:
+                error_code = response.get("error_code", "UNKNOWN")
+                raise ValueError(f"Empty LLM response, error_code={error_code}")
+
             data = json.loads(clean_json)
+            log.info(f"Parsed JSON keys: {data.keys() if isinstance(data, dict) else 'not a dict'}")
 
             new_quiz = DailyQuiz(
                 quiz_date=target_date,

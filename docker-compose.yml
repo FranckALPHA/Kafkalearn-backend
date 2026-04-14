@@ -36,11 +36,16 @@ services:
   vespa:
     image: vespaengine/vespa:latest
     container_name: kafkalearn_vespa
+    mem_limit: 1g
+    environment:
+      VESPA_CONFIGSERVER_JVMARGS: "-Xms256m -Xmx512m"
+      VESPA_CONTAINER_JVMARGS: "-Xms256m -Xmx512m"
+      VESPA_IGNORE_NOT_ENOUGH_MEMORY: "true"
     restart: always
     ports:
-      - "18080:8080"
-      - "19071:19071"
-      - "19092:19092"
+      - "18081:8080"
+      - "19072:19071"
+      - "19093:19092"
     volumes:
       - vespadata:/opt/vespa/var
 

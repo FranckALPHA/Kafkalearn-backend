@@ -62,6 +62,7 @@ async def indexer_fichier_async(
             nom_original=file.filename,
             uploaded_by=current_user.id,
             force_metadata=parsed_force_metadata,
+            file_path=tmp_path,
         )
         # Update the task to use file_path instead of file_bytes_b64
         return {
@@ -107,7 +108,7 @@ async def get_ingest_report(
 
 @router.post("/scan-folder", status_code=202)
 async def scan_folder(
-    request: FolderScanRequest,
+    body: FolderScanRequest,
     current_user: User = Depends(get_current_superadmin),
     folder_scan_service=Depends(get_folder_scan_service),
 ):
@@ -115,7 +116,7 @@ async def scan_folder(
     import threading
 
     job_id = folder_scan_service.lancer_scan_async(
-        dossier_path=request.chemin_dossier,
+        dossier_path=body.chemin_dossier,
         initiated_by=current_user.id,
     )
 
@@ -124,7 +125,7 @@ async def scan_folder(
         try:
             folder_scan_service.scan_and_ingest_sync(
                 job_id=job_id,
-                dossier_path=request.chemin_dossier,
+                dossier_path=body.chemin_dossier,
             )
         except Exception as exc:
             logger.error(f"Folder scan failed for job {job_id}: {exc}")

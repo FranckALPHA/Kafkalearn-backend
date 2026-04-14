@@ -18,12 +18,16 @@ class StorageService:
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
-    async def save_file(self, file_bytes: bytes, relative_path: str, mimetype: str = "application/pdf") -> str:
-        """Sauvegarde un fichier et retourne le chemin final."""
+    def save_file_sync(self, file_bytes: bytes, relative_path: str, mimetype: str = "application/pdf") -> str:
+        """Sauvegarde un fichier de manière synchrone et retourne le chemin final."""
         full_path = self.base_dir / relative_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_bytes(file_bytes)
         return str(full_path)
+
+    async def save_file(self, file_bytes: bytes, relative_path: str, mimetype: str = "application/pdf") -> str:
+        """Sauvegarde un fichier et retourne le chemin final."""
+        return self.save_file_sync(file_bytes, relative_path, mimetype)
 
     def file_exists(self, relative_path: str) -> bool:
         """Vérifie l'existence physique d'un fichier."""

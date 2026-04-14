@@ -73,6 +73,29 @@ from app.modules.search.models import (  # noqa: F401
     SearchSuggestionCache,
 )
 
+# Daily Quiz
+from app.modules.daily_quiz.models.daily_quiz_attempt import DailyQuizAttempt  # noqa: F401
+from app.modules.daily_quiz.models.daily_quiz import DailyQuiz  # noqa: F401
+from app.modules.daily_quiz.models.monthly_leaderboard import MonthlyLeaderboard  # noqa: F401
+
+# User Learning Signals & Feedback
+from app.modules.users.models.user_learning_signals import UserLearningSignals  # noqa: F401
+from app.modules.users.models.user_feedback import UserFeedback  # noqa: F401
+
+# Memory / Concept Graph
+from app.modules.memory.models.concept_graph import ConceptGraph  # noqa: F401
+from app.modules.memory.models.memory_section import MemorySection  # noqa: F401
+from app.modules.memory.models.memory_item import MemoryItem  # noqa: F401
+
+# Document Analysis
+from app.modules.doc_analysis.models.document_analysis import DocumentAnalysis  # noqa: F401
+
+# Epreuves chunks
+from app.modules.epreuves.models.document_chunk import DocumentChunk  # noqa: F401
+
+# Wisdom
+from app.modules.wisdom.models.wisdom_tip import WisdomTip  # noqa: F401
+
 # ─── Setup cross-module relationships ────────────────────────────
 # Now that all models are imported, configure cross-module relationships
 from app.modules.users.models.user import User, _setup_cross_module_relationships  # noqa: F401

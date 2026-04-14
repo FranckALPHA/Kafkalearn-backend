@@ -1,4 +1,5 @@
-from fastapi import Depends, HTTPException, Header
+from fastapi import Depends, HTTPException, Header, Request
+from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.modules.users.utils.security import decode_token
@@ -16,11 +17,11 @@ def get_db():
 
 
 async def get_current_superadmin(
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
     security = HTTPBearer()
-    creds = await security()
+    creds = await security(request)
     try:
         payload = decode_token(creds.credentials, expected_type="access")
         user = db.query(User).filter(User.id == payload.get("sub"), User.is_active == True).first()
@@ -48,11 +49,6 @@ def verify_cron_secret(x_cron_secret: str = Header(None)):
 def get_ingest_service(db: Session = Depends(get_db)):
     from app.modules.ingest.services.ingest_service import IngestService
     return IngestService(db=db)
-
-
-def get_worker_coordinator(db: Session = Depends(get_db)):
-    from app.modules.ingest.services.worker_coordinator_service import WorkerCoordinatorService
-    return WorkerCoordinatorService(db=db)
 
 
 def get_folder_scan_service(db: Session = Depends(get_db)):

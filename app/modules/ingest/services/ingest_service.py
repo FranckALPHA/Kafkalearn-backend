@@ -23,6 +23,7 @@ class IngestService(IngestBaseService):
         nom_original: str,
         uploaded_by,
         force_metadata: dict = None,
+        file_path: str = None,
     ) -> dict:
         """Create an IngestJob and queue a Celery task for async processing."""
         from app.modules.ingest.models import IngestJob
@@ -43,7 +44,7 @@ class IngestService(IngestBaseService):
 
             process_single_ingest_task.delay(
                 job_id=job_id,
-                file_bytes_b64=None,
+                file_path=file_path,
                 nom_original=nom_original,
                 uploaded_by=str(uploaded_by),
                 force_metadata=force_metadata,
@@ -122,6 +123,9 @@ class IngestService(IngestBaseService):
 
                 pipeline = PipelineExtraction()
                 texte_extrait = pipeline.extraire_texte(file_bytes, file_type)
+                # Clean NUL characters which PostgreSQL doesn't support
+                if texte_extrait:
+                    texte_extrait = texte_extrait.replace("\x00", "")
             except Exception as exc:
                 logger.warning(f"Text extraction failed for {nom_original}: {exc}")
                 texte_extrait = ""
@@ -166,6 +170,102 @@ class IngestService(IngestBaseService):
                 from app.modules.epreuves.services.document_service import DocumentService
 
                 doc_service = DocumentService(db=self.db, redis=self.redis)
+
+                # Sanitize metadata from LLM (may return invalid types)
+                if metadata:
+                    raw_annee = metadata.get("annee")
+                    if isinstance(raw_annee, int):
+                        annee_val = raw_annee
+                    elif isinstance(raw_annee, str):
+                        import re as _re
+                        _m = _re.search(r'(20\d{2})', str(raw_annee))
+                        annee_val = int(_m.group(1)) if _m else 2026
+                    else:
+                        annee_val = 2026
+
+                    raw_niveau = metadata.get("niveau", "")
+                    if isinstance(raw_niveau, str):
+                        raw_niveau = raw_niveau.strip() or "Non specifie"
+                    else:
+                        raw_niveau = "Non specifie"
+
+                    raw_serie = metadata.get("serie")
+                    if raw_serie is not None and isinstance(raw_serie, str):
+                        raw_serie = raw_serie.strip() or None
+                    if raw_serie is not None and not isinstance(raw_serie, str):
+                        raw_serie = str(raw_serie)
+
+                    raw_sous_type = metadata.get("sous_type")
+                    if raw_sous_type is not None and isinstance(raw_sous_type, str):
+                        raw_sous_type = raw_sous_type.strip() or None
+                    if raw_sous_type is not None and not isinstance(raw_sous_type, str):
+                        raw_sous_type = str(raw_sous_type) or None
+
+                    raw_notion = metadata.get("notion_principale")
+                    if raw_notion is not None and isinstance(raw_notion, str):
+                        raw_notion = raw_notion.strip() or None
+                    if raw_notion is not None and not isinstance(raw_notion, str):
+                        raw_notion = str(raw_notion) or None
+
+                    raw_diff = metadata.get("difficulte_estimee")
+                    if raw_diff is not None and isinstance(raw_diff, str):
+                        raw_diff = raw_diff.strip() or None
+                    if raw_diff is not None and not isinstance(raw_diff, str):
+                        raw_diff = str(raw_diff) or None
+
+                    raw_mots = metadata.get("mots_cles", [])
+                    if isinstance(raw_mots, str):
+                        # Try to parse JSON string like "[]" or "[\"word\"]"
+                        import json as _json2
+                        try:
+                            raw_mots = _json2.loads(raw_mots)
+                        except Exception:
+                            raw_mots = []
+                    if not isinstance(raw_mots, list):
+                        raw_mots = []
+
+                    raw_type = metadata.get("type_doc", "epreuve")
+                    if not isinstance(raw_type, str) or not raw_type:
+                        raw_type = "epreuve"
+
+                    raw_matiere = metadata.get("matiere", "Autre")
+                    if not isinstance(raw_matiere, str) or not raw_matiere:
+                        raw_matiere = "Autre"
+
+                    raw_langue = metadata.get("langue", "fr")
+                    if not isinstance(raw_langue, str) or not raw_langue:
+                        raw_langue = "fr"
+                    else:
+                        # Truncate to 5 chars (column is VARCHAR(5))
+                        raw_langue = raw_langue.strip()[:5]
+                        if not raw_langue:
+                            raw_langue = "fr"
+
+                    raw_etablissement = metadata.get("etablissement")
+                    if raw_etablissement is not None and isinstance(raw_etablissement, str):
+                        raw_etablissement = raw_etablissement.strip() or None
+                    if raw_etablissement is not None and not isinstance(raw_etablissement, str):
+                        raw_etablissement = str(raw_etablissement) or None
+
+                    raw_region = metadata.get("region")
+                    if raw_region is not None and isinstance(raw_region, str):
+                        raw_region = raw_region.strip() or None
+                    if raw_region is not None and not isinstance(raw_region, str):
+                        raw_region = str(raw_region) or None
+                else:
+                    annee_val = 2026
+                    raw_niveau = "Non specifie"
+                    raw_serie = None
+                    raw_sous_type = None
+                    raw_notion = None
+                    raw_diff = None
+                    raw_mots = []
+                    raw_type = "epreuve"
+                    raw_matiere = "Autre"
+                    raw_langue = "fr"
+                    raw_etablissement = None
+                    raw_region = None
+
                 file_data = {
                     "content": file_bytes,
                     "filename": nom_original,
@@ -174,24 +274,26 @@ class IngestService(IngestBaseService):
                 doc_metadata = {
                     "chemin_final": chemin_final,
                     "nom_affiche": nom_original,
-                    "matiere": metadata.get("matiere", "Autre") if metadata else "Autre",
-                    "niveau": metadata.get("niveau", "Non specifie") if metadata else "Non specifie",
-                    "serie": metadata.get("serie") if metadata else None,
-                    "annee": metadata.get("annee", 2026) if metadata else 2026,
-                    "type_doc": metadata.get("type_doc", "epreuve") if metadata else "epreuve",
-                    "sous_type": metadata.get("sous_type") if metadata else None,
-                    "notion_principale": metadata.get("notion_principale") if metadata else None,
-                    "mots_cles": metadata.get("mots_cles", []) if metadata else [],
+                    "matiere": raw_matiere,
+                    "niveau": raw_niveau,
+                    "serie": raw_serie,
+                    "annee": annee_val,
+                    "type_doc": raw_type,
+                    "sous_type": raw_sous_type,
+                    "notion_principale": raw_notion,
+                    "mots_cles": raw_mots,
                     "is_validated": metadata_confidence >= 0.6 if metadata else False,
-                    "difficulte_estimee": metadata.get("difficulte_estimee") if metadata else None,
-                    "etablissement": metadata.get("etablissement") if metadata else None,
-                    "region": metadata.get("region") if metadata else None,
-                    "langue": metadata.get("langue", "fr") if metadata else "fr",
+                    "difficulte_estimee": raw_diff,
+                    "etablissement": raw_etablissement,
+                    "region": raw_region,
+                    "langue": raw_langue,
                 }
-                doc_result = doc_service.ajouter_document(
-                    file_data=file_data,
-                    metadata=doc_metadata,
-                    uploaded_by=uploaded_by,
+                doc_result = asyncio.run(
+                    doc_service.ajouter_document(
+                        file_data=file_data,
+                        metadata=doc_metadata,
+                        uploaded_by=uploaded_by,
+                    )
                 )
                 doc_id = doc_result["document_id"]
             except Exception as exc:
@@ -209,18 +311,11 @@ class IngestService(IngestBaseService):
             except Exception as exc:
                 logger.warning(f"MeiliSearch indexing failed for doc {doc_id}: {exc}")
 
-            # 9. Create WorkerJob for Vespa embedding
+            # 9. Generate embeddings locally with FastEmbed
             try:
-                from app.modules.ingest.models import WorkerJob
-
-                worker_job = WorkerJob(
-                    document_id=doc_id,
-                    job_type="embed",
-                    status="pending",
-                )
-                self.db.add(worker_job)
+                self._generate_embeddings_local(doc_id, texte_extrait, nom_original, doc_obj)
             except Exception as exc:
-                logger.warning(f"WorkerJob creation failed for doc {doc_id}: {exc}")
+                logger.warning(f"Local embedding failed for doc {doc_id}: {exc}")
 
             # 10. Update text extract on document
             doc_obj = self.db.query(Document).filter(Document.id == doc_id).first()
@@ -291,3 +386,99 @@ class IngestService(IngestBaseService):
             job.completed_at = datetime.utcnow()
             self.db.commit()
             raise
+
+    # ─── Local Embedding Generation ──────────────────────────────
+    def _generate_embeddings_local(self, doc_id: int, texte_extrait: str, nom_original: str, doc_obj=None):
+        """
+        Generate embeddings locally with FastEmbed and store chunks in DB + Vespa.
+        Replaces the external worker approach.
+        """
+        from app.modules.epreuves.models.document_chunk import DocumentChunk
+        from app.modules.ingest.models import WorkerJob
+        from fastembed import TextEmbedding
+        import asyncio
+
+        CHUNK_SIZE = 1500  # characters per chunk
+        OVERLAP = 200  # overlap between chunks
+
+        # 1. Split text into chunks
+        chunks = []
+        start = 0
+        while start < len(texte_extrait):
+            end = start + CHUNK_SIZE
+            chunk_text = texte_extrait[start:end]
+            chunks.append(chunk_text)
+            start = end - OVERLAP
+            if start >= len(texte_extrait) - CHUNK_SIZE:
+                break
+
+        if not chunks:
+            logger.info(f"No text to embed for doc {doc_id}")
+            return
+
+        # 2. Generate embeddings with FastEmbed
+        model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        embeddings = list(model.embed(chunks))
+
+        # 3. Save chunks to DB
+        chunk_records = []
+        for idx, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
+            nb_tokens = len(chunk_text.split())
+            chunk_record = DocumentChunk(
+                doc_id=doc_id,
+                texte_chunk=chunk_text[:4000],  # limit DB size
+                chunk_idx=idx,
+                nb_tokens_estime=nb_tokens,
+                is_embedded=True,
+            )
+            self.db.add(chunk_record)
+            chunk_records.append(chunk_record)
+
+        self.db.flush()
+
+        # 4. Update Document.is_embedded
+        if doc_obj is None:
+            doc_obj = self.db.query(Document).filter(Document.id == doc_id).first()
+        if doc_obj:
+            doc_obj.is_embedded = True
+
+        # 5. Send to Vespa (best effort)
+        try:
+            asyncio.run(self._send_to_vespa(doc_id, chunks, embeddings, nom_original, doc_obj))
+        except Exception as exc:
+            logger.warning(f"Vespa indexing failed for doc {doc_id}: {exc}")
+
+        # 6. Create WorkerJob as complete (for API compatibility)
+        worker_job = WorkerJob(
+            document_id=doc_id,
+            job_type="embed",
+            status="complete",
+            nb_chunks_generes=len(chunks),
+        )
+        self.db.add(worker_job)
+
+        logger.info(f"Local embedding complete for doc {doc_id}: {len(chunks)} chunks")
+
+    async def _send_to_vespa(self, doc_id: int, chunks: list, embeddings: list, nom_original: str, doc_obj):
+        """Send chunks and embeddings to Vespa (best effort)."""
+        try:
+            import httpx
+            vespa_url = "http://localhost:18080"
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                for idx, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
+                    vespa_doc = {
+                        "put": f"id:epreuves:epreuve::{doc_id}_{idx}",
+                        "fields": {
+                            "doc_id": doc_id,
+                            "chunk_idx": idx,
+                            "content": chunk_text[:2000],
+                            "nom_original": nom_original[:200],
+                            "matiere": doc_obj.matiere or "Autre",
+                            "niveau": doc_obj.niveau or "Non specifie",
+                            "embedding": embedding.tolist(),
+                        }
+                    }
+                    await client.post(f"{vespa_url}/document/v1/epreuves/epreuve/docid/{doc_id}_{idx}", json=vespa_doc)
+            logger.info(f"Vespa indexing succeeded for doc {doc_id}: {len(chunks)} chunks")
+        except Exception as exc:
+            logger.warning(f"Vespa feed failed for doc {doc_id}: {exc}")

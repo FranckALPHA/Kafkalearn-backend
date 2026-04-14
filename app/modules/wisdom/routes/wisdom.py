@@ -6,7 +6,7 @@ Endpoints publics pour le module wisdom (daily tip, rating, sharing).
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException, Query
 
 from app.modules.wisdom.schemas.responses import DailyWisdomResponse, ShareResponse
 from app.modules.wisdom.routes.dependencies import (
@@ -56,7 +56,7 @@ async def get_daily_wisdom(
 @router.post("/daily/rate")
 async def rate_daily_wisdom(
     request: Request,
-    rating: int,
+    rating: int = Query(..., ge=1, le=5),
     current_user: User = Depends(get_current_user),
     wisdom_service=Depends(get_wisdom_service),
     _rate_limit=Depends(get_rate_limiter_dependency(wisdom_rate_limiter)),
@@ -73,6 +73,28 @@ async def rate_daily_wisdom(
     )
 
     wisdom_id = tip_data.get("id")
+    # If fallback tip (no DB id), create it first so we can rate/share it
+    if wisdom_id is None and tip_data.get("fallback"):
+        from app.modules.wisdom.models import WisdomTip, WisdomUserInteraction
+        new_tip = WisdomTip(
+            tip_date=target_date,
+            content_json=tip_data.get("content", {}),
+            category=tip_data.get("category", "vie"),
+            source="static",
+        )
+        wisdom_service.db.add(new_tip)
+        wisdom_service.db.commit()
+        wisdom_service.db.refresh(new_tip)
+        wisdom_id = new_tip.id
+        # Mark as viewed so rating works
+        interaction = WisdomUserInteraction(
+            user_id=current_user.id,
+            wisdom_id=wisdom_id,
+            vue=True,
+        )
+        wisdom_service.db.add(interaction)
+        wisdom_service.db.commit()
+
     if wisdom_id is None:
         raise HTTPException(status_code=404, detail="TIP_NOT_FOUND")
 
@@ -103,6 +125,20 @@ async def share_daily_wisdom(
     )
 
     wisdom_id = tip_data.get("id")
+    # If fallback tip (no DB id), create it first so we can share it
+    if wisdom_id is None and tip_data.get("fallback"):
+        from app.modules.wisdom.models import WisdomTip
+        new_tip = WisdomTip(
+            tip_date=target_date,
+            content_json=tip_data.get("content", {}),
+            category=tip_data.get("category", "vie"),
+            source="static",
+        )
+        wisdom_service.db.add(new_tip)
+        wisdom_service.db.commit()
+        wisdom_service.db.refresh(new_tip)
+        wisdom_id = new_tip.id
+
     if wisdom_id is None:
         raise HTTPException(status_code=404, detail="TIP_NOT_FOUND")
 

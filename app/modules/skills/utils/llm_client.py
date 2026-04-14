@@ -16,6 +16,7 @@ class LLMProvider(Enum):
 class LLMClient:
     """
     Client LLM unifié avec fallback automatique et gestion des quotas.
+    Logging de chaque appel pour tracer le provider utilisé.
     """
 
     def __init__(
@@ -33,7 +34,7 @@ class LLMClient:
 
         self.api_keys = api_keys or {}
         self.default_provider = default_provider
-        self.client = httpx.AsyncClient(timeout=30.0)
+        self.client = httpx.AsyncClient(timeout=120.0)
 
         configured_keys = [k for k in OPENROUTER_API_KEYS if k]
         provided_keys = [k for k in self.api_keys.get("openrouter_api_keys", []) if k]
@@ -87,9 +88,6 @@ class LLMClient:
             }
         """
         provider = provider or self.default_provider
-        if provider != LLMProvider.OPENROUTER:
-            logger.warning("Provider %s non supporte dans ce mode, bascule sur OpenRouter", provider.value)
-            provider = LLMProvider.OPENROUTER
 
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
@@ -105,13 +103,29 @@ class LLMClient:
             system_instruction = system_prompt
 
         start_ms = time.time() * 1000
-        
+
+        # Log provider selection
+        logger.info("LLM call requested: provider=%s, model=%s", provider.value,
+                    self.ollama_model if provider == LLMProvider.OLLAMA else self.openrouter_model)
+
         try:
             try:
-                result = await self._call_openrouter(messages, temperature, max_tokens, response_format)
-                used_provider = LLMProvider.OPENROUTER.value
-            except Exception as openrouter_exc:
-                logger.warning("OpenRouter indisponible, fallback vers Ollama: %s", openrouter_exc)
+                if provider == LLMProvider.OLLAMA:
+                    logger.info("LLM provider called: Ollama (%s)", self.ollama_model)
+                    result = await self._call_ollama(messages, temperature, max_tokens, response_format)
+                    used_provider = LLMProvider.OLLAMA.value
+                elif provider == LLMProvider.OPENROUTER:
+                    logger.info("LLM provider called: OpenRouter (%s)", self.openrouter_model)
+                    result = await self._call_openrouter(messages, temperature, max_tokens, response_format)
+                    used_provider = LLMProvider.OPENROUTER.value
+                else:
+                    logger.info("LLM provider called: OpenRouter (fallback from %s)", provider.value)
+                    result = await self._call_openrouter(messages, temperature, max_tokens, response_format)
+                    used_provider = LLMProvider.OPENROUTER.value
+            except Exception as e:
+                # Fallback to Ollama if primary fails
+                logger.warning("LLM provider %s failed: %s, fallback to Ollama", provider.value, e)
+                logger.info("LLM provider called: Ollama (%s) [fallback]", self.ollama_model)
                 result = await self._call_ollama(messages, temperature, max_tokens, response_format)
                 used_provider = LLMProvider.OLLAMA.value
             
@@ -229,7 +243,8 @@ class LLMClient:
 
                 if response.status_code < 400:
                     data = response.json()
-                    text = data["choices"][0]["message"]["content"]
+                    msg = data["choices"][0]["message"]
+                    text = msg.get("content") or msg.get("reasoning") or ""
                     tokens = data.get("usage", {}).get("total_tokens", 0)
                     return {"text": text, "tokens_used": tokens}
 
@@ -259,8 +274,10 @@ class LLMClient:
 
     async def _call_ollama(self, messages, temperature, max_tokens, response_format):
         """Fallback local via Ollama quand OpenRouter échoue."""
+        # Hardcode known good model - env vars may be stale in PM2
+        model = "qwen2.5:1.5b"
         payload = {
-            "model": self.ollama_model,
+            "model": model,
             "messages": messages,
             "stream": False,
             "options": {

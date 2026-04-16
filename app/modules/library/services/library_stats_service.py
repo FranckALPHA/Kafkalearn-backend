@@ -24,7 +24,6 @@ class LibraryStatsService(LibraryBaseService):
         # Total assets
         total_assets = (
             self.db.query(func.count(PedagogicalAsset.id))
-            .filter(PedagogicalAsset.is_deleted.isnot(True))
             .scalar() or 0
         )
 
@@ -33,7 +32,6 @@ class LibraryStatsService(LibraryBaseService):
             self.db.query(func.count(PedagogicalAsset.id))
             .filter(
                 PedagogicalAsset.is_public == True,
-                PedagogicalAsset.is_deleted.isnot(True),
             )
             .scalar() or 0
         )
@@ -44,7 +42,6 @@ class LibraryStatsService(LibraryBaseService):
                 PedagogicalAsset.asset_type,
                 func.count(PedagogicalAsset.id),
             )
-            .filter(PedagogicalAsset.is_deleted.isnot(True))
             .group_by(PedagogicalAsset.asset_type)
             .all()
         )
@@ -55,7 +52,6 @@ class LibraryStatsService(LibraryBaseService):
         generated_7j = (
             self.db.query(func.count(PedagogicalAsset.id))
             .filter(
-                PedagogicalAsset.is_deleted.isnot(True),
                 PedagogicalAsset.created_at >= seven_days_ago,
             )
             .scalar() or 0
@@ -65,7 +61,6 @@ class LibraryStatsService(LibraryBaseService):
         total_storage = (
             self.db.query(func.coalesce(func.sum(PedagogicalAsset.file_size_bytes), 0))
             .filter(
-                PedagogicalAsset.is_deleted.isnot(True),
                 PedagogicalAsset.file_size_bytes.isnot(None),
             )
             .scalar() or 0
@@ -92,7 +87,6 @@ class LibraryStatsService(LibraryBaseService):
             self.db.query(PedagogicalAsset)
             .filter(
                 PedagogicalAsset.is_public == True,
-                PedagogicalAsset.is_deleted.isnot(True),
                 PedagogicalAsset.note_moyenne.isnot(None),
             )
             .order_by(
@@ -117,7 +111,6 @@ class LibraryStatsService(LibraryBaseService):
             self.db.query(func.count(PedagogicalAsset.id))
             .filter(
                 PedagogicalAsset.user_id == user_id,
-                PedagogicalAsset.is_deleted.isnot(True),
             )
             .scalar() or 0
         )

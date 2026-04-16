@@ -1,15 +1,35 @@
+"""
+models/calendar_session.py
+========================
+Entité CalendarSession — sessions d'étude planifiées.
+"""
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Column, ForeignKey, Integer, String, Text, Float, Boolean, TIMESTAMP, CheckConstraint, Index, func
+from sqlalchemy import (
+    Column,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    Float,
+    Boolean,
+    CheckConstraint,
+    Index,
+    TIMESTAMP,
+    func
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
+from app.modules.users.models.mixins import SoftDeleteMixin
 
 
-class CalendarSession(TimestampMixin, Base):
+class CalendarSession(Base, SoftDeleteMixin):
     __tablename__ = "calendar_sessions"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
@@ -83,6 +103,13 @@ class CalendarSession(TimestampMixin, Base):
         uselist=False,
         cascade="all, delete-orphan"
     )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if not self.created_at:
+            self.created_at = datetime.now(timezone.utc)
+        if not self.updated_at:
+            self.updated_at = datetime.now(timezone.utc)
 
     @property
     def is_active_or_planned(self) -> bool:

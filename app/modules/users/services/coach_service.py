@@ -10,6 +10,7 @@ Architecture :
   3. Calcule le meilleur contenu, moment et format
   4. Retourne une recommandation actionnable
 """
+
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -34,16 +35,43 @@ class CoachService:
     def _get_signals(self, user_id: str) -> UserLearningSignals:
         """Récupère ou crée les signaux d'un utilisateur."""
         from uuid import UUID
+
+        try:
+            user_uuid = UUID(user_id)
+        except ValueError:
+            user_uuid = user_id
+
+        logger.debug(f"Looking for signals for user_id: {user_uuid}")
         signals = (
             self.db.query(UserLearningSignals)
-            .filter(UserLearningSignals.user_id == UUID(user_id))
+            .filter(UserLearningSignals.user_id == user_uuid)
             .first()
         )
+
         if not signals:
-            signals = UserLearningSignals(user_id=user_id)
+            logger.debug(f"No signals found for user {user_uuid}, creating new entry")
+            signals = UserLearningSignals(
+                user_id=user_uuid,
+                temporal_signals={},
+                behavioral_signals={},
+                cognitive_signals={},
+                contextual_signals={},
+            )
+            logger.debug(f"Created signals object: {signals}")
             self.db.add(signals)
-            self.db.commit()
-            self.db.refresh(signals)
+            try:
+                self.db.commit()
+                self.db.refresh(signals)
+                logger.debug(f"Successfully created signals for user {user_uuid}")
+            except Exception as e:
+                self.db.rollback()
+                logger.error(
+                    f"Failed to create UserLearningSignals: {e}", exc_info=True
+                )
+                raise
+        else:
+            logger.debug(f"Found existing signals for user {user_uuid}")
+
         return signals
 
     def _update_layer(self, user_id: str, layer: str, data: dict):
@@ -58,9 +86,15 @@ class CoachService:
     # Enrichissement automatique des signaux
     # ─────────────────────────────────────────────────────────────
 
-    def record_session(self, user_id: str, duration_min: int, matiere: str,
-                       score: float, difficulty: str = "medium",
-                       completed: bool = True):
+    def record_session(
+        self,
+        user_id: str,
+        duration_min: int,
+        matiere: str,
+        score: float,
+        difficulty: str = "medium",
+        completed: bool = True,
+    ):
         """Enregistre une session d'étude et met à jour les signaux."""
         signals = self._get_signals(user_id)
         now = datetime.utcnow()
@@ -76,18 +110,24 @@ class CoachService:
 
         # Moyenne mobile de la durée
         avg_dur = temporal.get("avg_session_duration_min", duration_min)
-        temporal["avg_session_duration_min"] = round(avg_dur * 0.8 + duration_min * 0.2, 1)
+        temporal["avg_session_duration_min"] = round(
+            avg_dur * 0.8 + duration_min * 0.2, 1
+        )
         temporal["preferred_hours"] = hours
         temporal["preferred_days"] = days
         temporal["last_active_at"] = now.isoformat()
-        temporal["current_streak"] = temporal.get("current_streak", 0) + 1 if completed else 0
+        temporal["current_streak"] = (
+            temporal.get("current_streak", 0) + 1 if completed else 0
+        )
         signals.temporal_signals = temporal
 
         # Comportemental
         behavioral = signals.behavioral_signals or {}
         quit_key = f"quit_rate_{difficulty}"
         current_quit = behavioral.get(quit_key, 0.1)
-        behavioral[quit_key] = round(current_quit * 0.9 + (0 if completed else 1) * 0.1, 2)
+        behavioral[quit_key] = round(
+            current_quit * 0.9 + (0 if completed else 1) * 0.1, 2
+        )
 
         # Profil : cherche-t-il la pratique ou la théorie ?
         if difficulty == "hard" and completed and score < 50:
@@ -107,8 +147,14 @@ class CoachService:
 
         self.db.commit()
 
-    def record_quiz_result(self, user_id: str, matiere: str, score: float,
-                           notions: List[str], time_spent_sec: int):
+    def record_quiz_result(
+        self,
+        user_id: str,
+        matiere: str,
+        score: float,
+        notions: List[str],
+        time_spent_sec: int,
+    ):
         """Enregistre un résultat de quiz et détecte les patterns profonds."""
         signals = self._get_signals(user_id)
         cognitive = signals.cognitive_signals or {}
@@ -160,7 +206,9 @@ class CoachService:
         expected_matiere = expected.get(matiere, 60)
         gap = abs(score - expected_matiere)
         current_meta = cognitive.get("meta_awareness", 0.5)
-        cognitive["meta_awareness"] = round(current_meta * 0.95 + (1 - gap / 100) * 0.05, 2)
+        cognitive["meta_awareness"] = round(
+            current_meta * 0.95 + (1 - gap / 100) * 0.05, 2
+        )
 
         signals.cognitive_signals = cognitive
         self.db.commit()
@@ -172,13 +220,24 @@ class CoachService:
         contextual = signals.contextual_signals or {}
 
         # Mode urgence
-        urgency_keywords = ["examen", "bac", "baccalauréat", "dans ", "jours", "semaines",
-                          "demain", "bientôt", "urgent", "presse"]
+        urgency_keywords = [
+            "examen",
+            "bac",
+            "baccalauréat",
+            "dans ",
+            "jours",
+            "semaines",
+            "demain",
+            "bientôt",
+            "urgent",
+            "presse",
+        ]
         if any(kw in msg_lower for kw in urgency_keywords):
             contextual["urgency_mode"] = True
             # Extraire le nombre de jours si possible
             import re
-            days_match = re.search(r'(\d+)\s*(jour|semaine)', msg_lower)
+
+            days_match = re.search(r"(\d+)\s*(jour|semaine)", msg_lower)
             if days_match:
                 val = int(days_match.group(1))
                 unit = days_match.group(2)
@@ -220,7 +279,9 @@ class CoachService:
         Fallback si le graphe n'est pas disponible (problème RAM).
         """
         try:
-            return await self._recommend_with_graph(user_id, concept_graph_service, available_content)
+            return await self._recommend_with_graph(
+                user_id, concept_graph_service, available_content
+            )
         except Exception as e:
             logger.warning(f"Graph recommendation failed: {e}, using fallback")
             return self._recommend_fallback(user_id)
@@ -228,7 +289,9 @@ class CoachService:
     async def _recommend_with_graph(
         self, user_id: str, concept_graph_service=None, available_content=None
     ) -> Dict[str, Any]:
-        from app.modules.memory.services.concept_graph_service import ConceptGraphService
+        from app.modules.memory.services.concept_graph_service import (
+            ConceptGraphService,
+        )
 
         signals = self._get_signals(user_id)
         temporal = signals.temporal_signals or {}
@@ -300,8 +363,12 @@ class CoachService:
 
         # 4. Déterminer le message
         message = self._generate_message(
-            concept=concept, matiere=matiere, reason=reason,
-            contextual=contextual, behavioral=behavioral, temporal=temporal,
+            concept=concept,
+            matiere=matiere,
+            reason=reason,
+            contextual=contextual,
+            behavioral=behavioral,
+            temporal=temporal,
         )
 
         # 5. Temps estimé
@@ -336,8 +403,13 @@ class CoachService:
         }
 
     def _generate_message(
-        self, concept: str, matiere: str, reason: str,
-        contextual: dict, behavioral: dict, temporal: dict,
+        self,
+        concept: str,
+        matiere: str,
+        reason: str,
+        contextual: dict,
+        behavioral: dict,
+        temporal: dict,
         langue: str = "fr",
     ) -> str:
         """Génère un message motivationnel personnalisé. Bilingue FR/EN."""
@@ -355,12 +427,20 @@ class CoachService:
                 matiere=matiere,
             )
         elif streak >= 7:
-            return format_msg(
-                t(COACH_MESSAGES["streak"], langue),
-                days=streak,
-            ) + f" {format_msg(t(COACH_MESSAGES['session_recommendation'], langue), concept=concept, matiere=matiere, duration=temporal.get('avg_session_duration_min', 20))}"
+            return (
+                format_msg(
+                    t(COACH_MESSAGES["streak"], langue),
+                    days=streak,
+                )
+                + f" {format_msg(t(COACH_MESSAGES['session_recommendation'], langue), concept=concept, matiere=matiere, duration=temporal.get('avg_session_duration_min', 20))}"
+            )
         elif concept and reason:
-            return format_msg(t(COACH_MESSAGES["session_recommendation"], langue), concept=concept, matiere=matiere, duration=temporal.get('avg_session_duration_min', 20))
+            return format_msg(
+                t(COACH_MESSAGES["session_recommendation"], langue),
+                concept=concept,
+                matiere=matiere,
+                duration=temporal.get("avg_session_duration_min", 20),
+            )
         else:
             return t(COACH_MESSAGES["no_data"], langue)
 
@@ -379,7 +459,9 @@ class CoachService:
         Fallback simple si le graphe n'est pas dispo.
         """
         try:
-            return await self._generate_plan_with_graph(user_id, days_ahead, concept_graph_service)
+            return await self._generate_plan_with_graph(
+                user_id, days_ahead, concept_graph_service
+            )
         except Exception as e:
             logger.warning(f"Study plan failed: {e}, using fallback")
             return self._generate_plan_fallback(user_id, days_ahead)
@@ -413,9 +495,11 @@ class CoachService:
 
         # Interleaving : mélanger les matières
         import random
+
         random.shuffle(concepts_list)
 
         from datetime import date as dt_date
+
         today = dt_date.today()
 
         for day_offset in range(days_ahead):
@@ -427,33 +511,40 @@ class CoachService:
                     break
                 item = concepts_list.pop(0)
 
-                plan.append({
-                    "date": current_date.isoformat(),
-                    "hour": int(best_hour) + slot * 2,
-                    "concept": item["concept"],
-                    "matiere": item["matiere"],
-                    "type": "revision",
-                    "estimated_duration_min": 20,
-                })
+                plan.append(
+                    {
+                        "date": current_date.isoformat(),
+                        "hour": int(best_hour) + slot * 2,
+                        "concept": item["concept"],
+                        "matiere": item["matiere"],
+                        "type": "revision",
+                        "estimated_duration_min": 20,
+                    }
+                )
 
                 # Remettre le concept en fin de liste pour la répétition espacée
                 concepts_list.append(item)
 
         return plan
 
-    def _generate_plan_fallback(self, user_id: str, days_ahead: int) -> List[Dict[str, Any]]:
+    def _generate_plan_fallback(
+        self, user_id: str, days_ahead: int
+    ) -> List[Dict[str, Any]]:
         """Planning simplifié sans graphe."""
         from datetime import date as dt_date
+
         today = dt_date.today()
         plan = []
         for day_offset in range(days_ahead):
             current_date = today + timedelta(days=day_offset)
-            plan.append({
-                "date": current_date.isoformat(),
-                "hour": 20,
-                "concept": "revision_generale",
-                "matiere": "general",
-                "type": "quiz",
-                "estimated_duration_min": 20,
-            })
+            plan.append(
+                {
+                    "date": current_date.isoformat(),
+                    "hour": 20,
+                    "concept": "revision_generale",
+                    "matiere": "general",
+                    "type": "quiz",
+                    "estimated_duration_min": 20,
+                }
+            )
         return plan

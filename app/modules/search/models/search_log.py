@@ -4,18 +4,30 @@ models/search_log.py
 Journal complet de chaque recherche, source principale d'analytics.
 """
 from sqlalchemy import (
-    Column, String, Text, Integer, Float, Boolean, SMALLINT,
-    TIMESTAMP, CheckConstraint, Index, ForeignKey, func
+    Column,
+    String,
+    Text,
+    Integer,
+    Float,
+    Boolean,
+    SMALLINT,
+    CheckConstraint,
+    Index,
+    ForeignKey,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class SearchLog(Base, TimestampMixin):
+class SearchLog(Base):
     __tablename__ = "search_logs"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ─── Identifiants ────────────────────────────────────────────
     id = Column(Integer, primary_key=True, autoincrement=True)

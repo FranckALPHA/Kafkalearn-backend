@@ -56,14 +56,18 @@ class AnalysisFeedbackService(DocAnalysisBaseService):
                     analysis.feedback_pas_utile += 1
                     analysis.feedback_utile -= 1
         else:
+            now = datetime.utcnow()
             new_feedback = AnalysisFeedback(
                 analysis_id=analysis_id,
                 user_id=user_id,
                 est_utile=est_utile,
                 section_problematique=section_problematique,
                 commentaire=commentaire,
+                created_at=now,
+                updated_at=now,
             )
             self.db.add(new_feedback)
+
             
             # Increment the appropriate counter for new feedback
             if est_utile:

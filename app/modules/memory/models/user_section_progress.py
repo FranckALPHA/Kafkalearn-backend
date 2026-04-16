@@ -5,18 +5,28 @@ Suivi de progression des utilisateurs sur les sections mémoire.
 """
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import (
-    Column, Integer, Float, Boolean, ForeignKey,
-    CheckConstraint, Index, UniqueConstraint, TIMESTAMP, func
+    Column,
+    Integer,
+    Float,
+    Boolean,
+    ForeignKey,
+    CheckConstraint,
+    Index,
+    UniqueConstraint,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class UserSectionProgress(Base, TimestampMixin):
+class UserSectionProgress(Base):
     __tablename__ = "user_section_progress"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ─── Identité ────────────────────────────────────────────────
     id = Column(Integer, primary_key=True, autoincrement=True)

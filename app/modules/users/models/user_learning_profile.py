@@ -5,16 +5,18 @@ Profil cognitif de l'apprenant.
 Les lacunes/forces/scores sont maintenant gérés par concept_graph (graphe cognitif).
 Ce modèle conserve les données non relationnelles (historique, préférences, metadata).
 """
-from sqlalchemy import Column, Integer, TIMESTAMP, ForeignKey, Index
+from sqlalchemy import Column, Integer, TIMESTAMP, ForeignKey, Index, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from .mixins import TimestampMixin
 
 
-class UserLearningProfile(Base, TimestampMixin):
+class UserLearningProfile(Base):
     __tablename__ = "user_learning_profiles"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(

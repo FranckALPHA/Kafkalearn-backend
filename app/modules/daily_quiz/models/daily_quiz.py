@@ -1,13 +1,29 @@
-from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DATE, CheckConstraint, Index
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    Float,
+    Boolean,
+    DATE,
+    CheckConstraint,
+    Index,
+    TIMESTAMP,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class DailyQuiz(Base, TimestampMixin):
+class DailyQuiz(Base):
     __tablename__ = "daily_quiz"
+
+    created_at = Column(TIMESTAMP, default=func.now(), nullable=False)
+    updated_at = Column(
+        TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     quiz_date = Column(DATE, nullable=False, unique=True, index=True)
@@ -80,12 +96,18 @@ class DailyQuiz(Base, TimestampMixin):
         cascade="all, delete-orphan",
     )
 
-    def get_questions_for_langue(self, langue: str = "fr", include_answers: bool = False) -> list:
-        lang_questions = self.questions_json.get(langue, self.questions_json.get("fr", []))
+    def get_questions_for_langue(
+        self, langue: str = "fr", include_answers: bool = False
+    ) -> list:
+        if isinstance(self.questions_json, list):
+            lang_questions = self.questions_json
+        else:
+            lang_questions = self.questions_json.get(
+                langue, self.questions_json.get("fr", [])
+            )
         if not include_answers:
             return [
-                {k: v for k, v in q.items() if k != "answer"}
-                for q in lang_questions
+                {k: v for k, v in q.items() if k != "answer"} for q in lang_questions
             ]
         return lang_questions
 

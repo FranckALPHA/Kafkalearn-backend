@@ -10,28 +10,47 @@ Architecture :
   3. Cognitif    : lacunes profondes vs superficielles (via SM-2 + graphe)
   4. Contextuel  : urgence, mode d'apprentissage, contraintes
 """
+
 from sqlalchemy import (
-    Column, Integer, Float, Boolean, String, Text, ForeignKey,
-    CheckConstraint, Index, UniqueConstraint, TIMESTAMP, func
+    Column,
+    Integer,
+    Float,
+    Boolean,
+    String,
+    Text,
+    ForeignKey,
+    CheckConstraint,
+    Index,
+    UniqueConstraint,
+    TIMESTAMP,
+    func,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class UserLearningSignals(Base, TimestampMixin):
+class UserLearningSignals(Base):
     """
     Une seule ligne par utilisateur. Chaque couche est un JSONB autonome
     qui grossit au fil du temps. Le Coach IA lit tout ça pour décider.
     """
+
     __tablename__ = "user_learning_signals"
+
+    created_at = Column(TIMESTAMP, default=func.now(), nullable=False)
+    updated_at = Column(
+        TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
-        unique=True, nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
     )
 
     # ─── COUCHE 1 : Temporel ─────────────────────────────────────

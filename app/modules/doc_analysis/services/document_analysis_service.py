@@ -57,6 +57,7 @@ class DocumentAnalysisService(DocAnalysisBaseService):
 
         analyse = await self.generer_analyse(document, langue)
 
+        now = datetime.utcnow()
         new_analysis = DocumentAnalysis(
             document_id=document_id,
             langue=langue,
@@ -72,8 +73,12 @@ class DocumentAnalysisService(DocAnalysisBaseService):
             notions_prerequis=analyse.get("notions_prerequis", []),
             llm_provider=analyse.get("llm_provider"),
             latence_ms=analyse.get("latence_ms"),
+            created_at=now,
+            updated_at=now,
+            analyzed_at=now,
         )
         self.db.add(new_analysis)
+
         self.db.commit()
         self.db.refresh(new_analysis)
 
@@ -147,6 +152,7 @@ class DocumentAnalysisService(DocAnalysisBaseService):
         analyse = await self.generer_analyse(document, langue)
 
         current_hash = HashUtils.hash_document_text(document.texte_extrait or "")
+        now = datetime.utcnow()
         new_analysis = DocumentAnalysis(
             document_id=document_id,
             langue=langue,
@@ -162,7 +168,10 @@ class DocumentAnalysisService(DocAnalysisBaseService):
             notions_prerequis=analyse.get("notions_prerequis", []),
             llm_provider=analyse.get("llm_provider"),
             latence_ms=analyse.get("latence_ms"),
-            refreshed_at=datetime.utcnow(),
+            created_at=now,
+            updated_at=now,
+            analyzed_at=now,
+            refreshed_at=now,
         )
         self.db.add(new_analysis)
         self.db.commit()

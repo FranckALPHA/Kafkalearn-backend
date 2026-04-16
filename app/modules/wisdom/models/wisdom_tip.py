@@ -4,19 +4,31 @@ models/wisdom_tip.py
 Modèle WisdomTip — Conseils de sagesse quotidiens.
 """
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy import (
-    Column, String, Text, Integer, Float, Boolean, TIMESTAMP, DATE,
-    CheckConstraint, Index, ForeignKey, func
+    Column,
+    String,
+    Text,
+    Integer,
+    Float,
+    Boolean,
+    DATE,
+    CheckConstraint,
+    Index,
+    ForeignKey,
+    TIMESTAMP,
+    func
 )
 
 
-class WisdomTip(Base, TimestampMixin):
+class WisdomTip(Base):
     """Conseil de sagesse quotidien généré ou administré."""
 
     __tablename__ = "wisdom_tips"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     tip_date = Column(DATE, nullable=False, unique=True, index=True)

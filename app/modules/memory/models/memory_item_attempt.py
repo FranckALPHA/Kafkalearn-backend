@@ -5,18 +5,28 @@ Historique des tentatives sur les éléments mémoire.
 """
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import (
-    Column, Integer, String, Text, Boolean, ForeignKey,
-    CheckConstraint, Index, func
+    Column,
+    Integer,
+    String,
+    Text,
+    Boolean,
+    ForeignKey,
+    CheckConstraint,
+    Index,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class MemoryItemAttempt(Base, TimestampMixin):
+class MemoryItemAttempt(Base):
     __tablename__ = "memory_item_attempts"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ─── Identité ────────────────────────────────────────────────
     id = Column(Integer, primary_key=True, autoincrement=True)

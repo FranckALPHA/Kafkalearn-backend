@@ -5,27 +5,32 @@ Table chat_sessions — Sessions de conversation skills.
 """
 
 import uuid
+from datetime import datetime, timezone
 from sqlalchemy import (
     Column,
     String,
     Integer,
     Boolean,
     SMALLINT,
-    TIMESTAMP,
     CheckConstraint,
     Index,
     ForeignKey,
+    TIMESTAMP,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class ChatSession(Base, TimestampMixin):
+class ChatSession(Base):
     __tablename__ = "chat_sessions"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(
+        TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     # ─── Identifiants ────────────────────────────────────────────
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -70,6 +75,13 @@ class ChatSession(Base, TimestampMixin):
         Index("idx_chat_session_user_updated", "user_id", "updated_at"),
         Index("idx_user_pinned", "user_id", "is_pinned", "updated_at"),
     )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if not self.created_at:
+            self.created_at = datetime.now(timezone.utc)
+        if not self.updated_at:
+            self.updated_at = datetime.now(timezone.utc)
 
     # ─── Méthodes utilitaires ────────────────────────────────────
     def add_message_preview(self, content: str, max_length: int = 200):

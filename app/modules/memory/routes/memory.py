@@ -84,13 +84,19 @@ async def list_sections(
         item = section.serialize_list_item(user_progress=progress)
         sections_data.append(item)
         if progress:
-            total_progress += progress.progression or 0.0
+            # Calcul de la progression (items complétés / total)
+            if progress.total_items_count and progress.total_items_count > 0:
+                progression = (progress.completed_items_count / progress.total_items_count) * 100
+            else:
+                progression = 0.0
+            
+            total_progress += progression
 
     progression_globale = total_progress / len(sections) if sections else 0.0
 
     # Get document titre from first section
     doc = sections[0].document if sections else None
-    document_titre = doc.titre if doc else "Unknown"
+    document_titre = doc.nom_affiche if doc else "Unknown"
 
     return SectionListResponse(
         document_id=document_id,
@@ -129,7 +135,7 @@ async def get_section_items(
         progress = UserSectionProgress(
             user_id=str(user.id),
             section_id=section_id,
-            current_index=0,
+            current_item_index=0,
         )
         db.add(progress)
         db.commit()
@@ -171,7 +177,7 @@ async def get_section_items(
         section_title=section.section_title,
         nb_items=len(items),
         langue=langue,
-        current_index=progress.current_index,
+        current_item_index=progress.current_item_index,
         items=items_data,
     )
 
@@ -254,12 +260,10 @@ async def submit_answer(
         user_id=str(user.id),
         item_id=item_id,
         section_id=section_id,
-        reponse_utilisateur=body.reponse,
+        reponse_donnee=body.reponse,
         qualite_reponse=body.qualite if body.qualite is not None else grading["score"],
-        score_obtenu=grading["score"],
         est_correct=grading["est_correct"],
         duree_secondes=body.duree_secondes,
-        grading_details=grading,
     )
     db.add(attempt)
 
@@ -274,8 +278,8 @@ async def submit_answer(
     )
     if progress:
         progress.last_reviewed_at = datetime.now(timezone.utc)
-        if progress.current_index is not None:
-            progress.current_index = min(progress.current_index + 1, item.nb_items or 999)
+        if progress.current_item_index is not None:
+            progress.current_item_index = min(progress.current_item_index + 1, item.section.nb_items or 999)
 
         # Update score (running average)
         attempts = (
@@ -287,9 +291,9 @@ async def submit_answer(
             .all()
         )
         if attempts:
-            avg_score = sum(a.score_obtenu for a in attempts) / len(attempts)
-            progress.score_section = round(avg_score, 2)
-            total_items = progress.current_index or len(attempts)
+            avg_score = sum(a.qualite_reponse or 0 for a in attempts) / len(attempts)
+            progress.score_section = round(avg_score * 20, 2) # Conversion sur 100
+            total_items = progress.current_item_index or len(attempts)
             progress.progression = round(total_items / max(len(db.query(MemoryItem).filter(MemoryItem.section_id == section_id).all()) or 1, 1) * 100, 2)
 
     db.commit()

@@ -1,12 +1,14 @@
-from sqlalchemy import Column, Integer, String, Text, CheckConstraint, Index, TIMESTAMP, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, CheckConstraint, Index, TIMESTAMP, ForeignKey, func
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class WorkerJob(Base, TimestampMixin):
+class WorkerJob(Base):
     __tablename__ = "worker_jobs"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     document_id = Column(

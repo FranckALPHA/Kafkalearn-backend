@@ -5,11 +5,13 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class SchoolMember(Base, TimestampMixin):
+class SchoolMember(Base):
     __tablename__ = "school_members"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     school_id = Column(String(8), ForeignKey("schools.id", ondelete="CASCADE"), nullable=False, index=True)

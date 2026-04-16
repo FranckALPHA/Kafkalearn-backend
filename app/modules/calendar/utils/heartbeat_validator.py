@@ -30,7 +30,9 @@ class HeartbeatValidator:
             return {"allowed": False, "error": "NOT_OWNER"}
 
         # Session expiry
-        if session.planned_end and session.planned_end + timedelta(hours=self.SESSION_EXPIRY_HOURS) < now:
+        # S'assurer que planned_end est timezone-aware
+        planned_end = session.planned_end.replace(tzinfo=timezone.utc) if session.planned_end.tzinfo is None else session.planned_end
+        if planned_end and planned_end + timedelta(hours=self.SESSION_EXPIRY_HOURS) < now:
             return {"allowed": False, "error": "SESSION_EXPIRED"}
 
         # Rate limiting
@@ -46,6 +48,10 @@ class HeartbeatValidator:
 
         # Delta since last ping
         last_ping = session.last_ping or session.actual_start or session.planned_start
+        # Normalisation : forcer en UTC aware
+        if last_ping and last_ping.tzinfo is None:
+            last_ping = last_ping.replace(tzinfo=timezone.utc)
+        
         delta_seconds = int((now - last_ping).total_seconds()) if last_ping else 0
 
         is_pause_detected = delta_seconds > self.PAUSE_THRESHOLD_SECONDS

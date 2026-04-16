@@ -3,16 +3,18 @@ models/user_activity.py
 =======================
 Suivi des activités utilisateur pour analytics et streaks.
 """
-from sqlalchemy import Column, Integer, String, ForeignKey, Index, JSON
+from sqlalchemy import Column, Integer, String, ForeignKey, Index, JSON, TIMESTAMP, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from .mixins import TimestampMixin
 
 
-class UserActivity(Base, TimestampMixin):
+class UserActivity(Base):
     __tablename__ = "user_activities"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(

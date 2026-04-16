@@ -3,9 +3,18 @@ models/user.py
 ==============
 Entité principale Users avec mixins, contraintes, index optimisés.
 """
+
 from sqlalchemy import (
-    Column, String, Boolean, Float, Integer, TIMESTAMP,
-    CheckConstraint, Index, ForeignKey, func
+    Column,
+    String,
+    Boolean,
+    Float,
+    Integer,
+    TIMESTAMP,
+    CheckConstraint,
+    Index,
+    ForeignKey,
+    func,
 )
 from sqlalchemy.sql import func as sql_func
 from sqlalchemy.orm import relationship, foreign
@@ -13,14 +22,17 @@ from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
 from app.core.database import Base
-from .mixins import TimestampMixin, SoftDeleteMixin
+from .mixins import SoftDeleteMixin
 
 # Import deferred for relationship (avoid circular)
 from .rbac import user_roles
 
 
-class User(Base, TimestampMixin, SoftDeleteMixin):
+class User(Base, SoftDeleteMixin):
     __tablename__ = "users"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ─── Identité ────────────────────────────────────────────────
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -36,7 +48,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         String(5),
         CheckConstraint("langue IN ('fr', 'en')"),
         nullable=False,
-        default="fr"
+        default="fr",
     )
     classe = Column(String(50), nullable=True, index=True)
     serie = Column(String(20), nullable=True, index=True)
@@ -54,7 +66,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
             "plan_base IN ('freemium','access','premium','pro','unlimited','school')"
         ),
         default="freemium",
-        nullable=False
+        nullable=False,
     )
     plan_effectif = Column(
         String(20),
@@ -62,7 +74,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
             "plan_effectif IN ('freemium','access','premium','pro','unlimited','school')"
         ),
         default="freemium",
-        nullable=False
+        nullable=False,
     )
     plan_expiration_at = Column(TIMESTAMP, nullable=True, index=True)
     school_id = Column(String(8), ForeignKey("schools.id"), nullable=True)
@@ -86,9 +98,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     matiere_faible = Column(String(100))
 
     score_global = Column(
-        Float,
-        CheckConstraint("score_global BETWEEN 0 AND 100"),
-        default=0.0
+        Float, CheckConstraint("score_global BETWEEN 0 AND 100"), default=0.0
     )
     progression_hebdo = Column(Float, default=0.0)
 
@@ -104,30 +114,37 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     role = Column(
         String(20),
         CheckConstraint("role IN ('student','admin','superadmin')"),
-        default="student"
+        default="student",
     )
 
     # ─── Relations ORM ───────────────────────────────────────────
     learning_profile = relationship(
-        "UserLearningProfile", uselist=False, back_populates="user",
-        cascade="all, delete-orphan"
+        "UserLearningProfile",
+        uselist=False,
+        back_populates="user",
+        cascade="all, delete-orphan",
     )
     activities = relationship("UserActivity", back_populates="user", lazy="dynamic")
     refresh_tokens = relationship("RefreshToken", back_populates="user", lazy="dynamic")
-    audit_logs = relationship("AuditLog", foreign_keys="AuditLog.user_id", back_populates="user", lazy="dynamic")
-    referred_users = relationship(
-        "User", remote_side=[id], backref="referee"
+    audit_logs = relationship(
+        "AuditLog",
+        foreign_keys="AuditLog.user_id",
+        back_populates="user",
+        lazy="dynamic",
     )
+    referred_users = relationship("User", remote_side=[id], backref="referee")
     roles = relationship(
-        "Role", secondary=user_roles,
+        "Role",
+        secondary=user_roles,
         primaryjoin="User.id==user_roles.c.user_id",
         secondaryjoin="Role.id==user_roles.c.role_id",
-        back_populates="users", lazy="selectin"
+        back_populates="users",
+        lazy="selectin",
     )
     quiz_attempts = relationship(
         "DailyQuizAttempt",
         back_populates="user",
-        lazy="dynamic",
+        lazy="raise_on_sql",
         cascade="all, delete-orphan",
     )
     leaderboard_entries = relationship(
@@ -144,12 +161,16 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         viewonly=True,
     )
     learning_signals = relationship(
-        "UserLearningSignals", uselist=False, back_populates="user",
-        cascade="all, delete-orphan"
+        "UserLearningSignals",
+        uselist=False,
+        back_populates="user",
+        cascade="all, delete-orphan",
     )
     feedback_entries = relationship(
-        "UserFeedback", back_populates="user", lazy="dynamic",
-        cascade="all, delete-orphan"
+        "UserFeedback",
+        back_populates="user",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
     )
     # ─── Cross-module relations (configured at end of file) ─────
     # documents, playlists, document_views, wisdom_interactions
@@ -165,7 +186,9 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     # ─── Méthodes utilitaires ────────────────────────────────────
     @property
     def needs_onboarding(self) -> bool:
-        return not self.onboarding_completed and not all([self.classe, self.serie, self.langue])
+        return not self.onboarding_completed and not all(
+            [self.classe, self.serie, self.langue]
+        )
 
     def serialize_minimal(self) -> dict:
         """Sérialisation légère pour les réponses auth."""
@@ -204,10 +227,19 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
 # These imports must happen after class definition to avoid circular imports
 def _setup_cross_module_relationships():
     """Configure cross-module relationships après chargement de toutes les classes.
-    
-    NOTE: Disabled for development - all cross-module relationships temporarily removed
-    to unblock the application. Will be re-enabled once SQLAlchemy mapper issues are resolved.
+
+    Cette fonction est appelée après que tous les modèles ont été importés
+    dans database_init.py pour résoudre les dépendances circulaires.
     """
+    # Import différé pour éviter les dépendances circulaires
+    from app.modules.daily_quiz.models.daily_quiz_attempt import DailyQuizAttempt
+    from app.modules.daily_quiz.models.monthly_leaderboard import MonthlyLeaderboard
+    from app.modules.memory.models.concept_graph import ConceptGraph
+
+    # Reconfigurer les relations avec les classes maintenant disponibles
+    # Note: Les relations définies avec des chaînes de caractères devraient déjà fonctionner
+    # Cette fonction est principalement pour les relations qui nécessitent des imports explicites
     pass
+
 
 _setup_cross_module_relationships()

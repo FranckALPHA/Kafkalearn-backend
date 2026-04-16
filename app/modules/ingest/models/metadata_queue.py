@@ -1,13 +1,15 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, CheckConstraint, Index, TIMESTAMP, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Boolean, CheckConstraint, Index, TIMESTAMP, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class MetadataQueue(Base, TimestampMixin):
+class MetadataQueue(Base):
     __tablename__ = "metadata_queue"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)

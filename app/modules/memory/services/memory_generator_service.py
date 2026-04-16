@@ -62,7 +62,7 @@ class MemoryGeneratorService(MemoryBaseService):
         doc = self.db.query(Document).filter(Document.id == document_id).first()
         if doc is None:
             raise ValueError(f"Document {document_id} not found")
-        if doc.type_doc not in ("lecon", "cours", "resume"):
+        if doc.type_doc.lower() not in ("lecon", "cours", "resume"):
             raise ValueError(
                 f"Document type '{doc.type_doc}' not supported. "
                 f"Only 'lecon', 'cours', 'resume' are supported."

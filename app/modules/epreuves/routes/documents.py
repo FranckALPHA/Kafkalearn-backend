@@ -47,6 +47,34 @@ async def list_documents(
     return await doc_service.liste_documents(filters=filters, sort=tri, page=page, limit=limit)
 
 
+@router.get("/filtres", response_model=FilterResponse)
+async def get_available_filters(
+    filter_service=Depends(get_filter_cache_service),
+):
+    filters = filter_service.get_filters()
+    return FilterResponse(**filters)
+
+
+@router.get("/trending", response_model=TrendingResponse)
+async def get_trending_documents(
+    matiere: Optional[str] = Query(None),
+    limit: int = Query(10, ge=1, le=20),
+    doc_service=Depends(get_document_service),
+):
+    results = await doc_service.obtenir_trending(periode_jours=7, matiere=matiere, limit=limit)
+    return {"periode_jours": 7, "matiere": matiere, "documents": results}
+
+
+@router.get("/recommandes", response_model=RecommendationResponse)
+async def get_recommended_documents(
+    current_user: User = Depends(get_current_user),
+    limit: int = Query(10, ge=1, le=20),
+    recommendation_engine=Depends(get_recommendation_engine),
+):
+    recs = recommendation_engine.recommander_mix(user_id=str(current_user.id), limit=limit)
+    return {"recommandations": recs}
+
+
 @router.get("/{doc_id}", response_model=DocumentDetailResponse)
 async def get_document_detail(
     doc_id: int,
@@ -152,9 +180,11 @@ async def upload_document(
 ):
     # Validate file
     file_data = await FileValidator.validate_upload(file)
-    
+    file_data["content"] = file_data.pop("file_bytes")
+
     metadata = {
         "nom_original": file.filename,
+
         "nom_affiche": nom_affiche,
         "matiere": matiere,
         "niveau": niveau,

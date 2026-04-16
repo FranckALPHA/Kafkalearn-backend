@@ -1,15 +1,17 @@
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, TIMESTAMP, func
 from sqlalchemy import Column, String, Integer, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 # UUID already imported
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class SchoolInvitationCSV(Base, TimestampMixin):
+class SchoolInvitationCSV(Base):
     __tablename__ = "school_invitations_csv"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     school_id = Column(String(8), ForeignKey("schools.id"), nullable=False)

@@ -3,6 +3,7 @@ routes/feedback.py
 ==================
 Endpoints de feedback explicite — l'utilisateur dit directement ce qu'il pense.
 """
+
 import logging
 from typing import Optional
 
@@ -15,6 +16,7 @@ from app.modules.users.routes.dependencies import (
 )
 from app.modules.users.models import User
 from app.modules.users.models.user_feedback import UserFeedback
+from app.modules.users.schemas.requests import FeedbackRequest
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +25,7 @@ router = APIRouter(prefix="/users/feedback", tags=["Feedback"])
 
 @router.post("/")
 async def submit_feedback(
-    feedback_type: str,
-    rating: float = Query(None, ge=1, le=5),
-    comment: str = None,
-    related_entity_type: str = None,
-    related_entity_id: int = None,
-    matiere: str = None,
-    concept: str = None,
+    feedback: FeedbackRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -43,25 +39,25 @@ async def submit_feedback(
     - coach_message : ton message était motivant / décourageant
     - system_suggestion : cette recommandation était pertinente / pas
     """
-    feedback = UserFeedback(
+    feedback_obj = UserFeedback(
         user_id=current_user.id,
-        feedback_type=feedback_type,
-        rating=rating,
-        comment=comment,
-        related_entity_type=related_entity_type,
-        related_entity_id=related_entity_id,
-        matiere=matiere,
-        concept=concept,
+        feedback_type=feedback.feedback_type,
+        rating=feedback.rating,
+        comment=feedback.comment,
+        related_entity_type=feedback.related_entity_type,
+        related_entity_id=feedback.related_entity_id,
+        matiere=feedback.matiere,
+        concept=feedback.concept,
     )
-    db.add(feedback)
+    db.add(feedback_obj)
     db.commit()
-    db.refresh(feedback)
+    db.refresh(feedback_obj)
 
     # Mettre à jour les signaux comportementaux en fonction du feedback
-    action = _apply_feedback_to_signals(db, str(current_user.id), feedback)
+    action = _apply_feedback_to_signals(db, str(current_user.id), feedback_obj)
 
     return {
-        "id": feedback.id,
+        "id": feedback_obj.id,
         "status": "received",
         "action_taken": action,
     }
@@ -124,7 +120,9 @@ async def get_feedback_stats(
     }
 
 
-def _apply_feedback_to_signals(db: Session, user_id: str, feedback: UserFeedback) -> str:
+def _apply_feedback_to_signals(
+    db: Session, user_id: str, feedback: UserFeedback
+) -> str:
     """Applique le feedback aux signaux comportementaux immédiatement."""
     from app.modules.users.services.coach_service import CoachService
 
@@ -137,12 +135,18 @@ def _apply_feedback_to_signals(db: Session, user_id: str, feedback: UserFeedback
     if feedback.feedback_type == "content_format":
         prefs = contextual.get("explicit_preferences", {})
         comment_lower = (feedback.comment or "").lower()
-        if "schéma" in comment_lower or "image" in comment_lower or "visuel" in comment_lower:
+        if (
+            "schéma" in comment_lower
+            or "image" in comment_lower
+            or "visuel" in comment_lower
+        ):
             prefs["prefers_schemas"] = feedback.rating >= 3
         if "texte" in comment_lower or "lire" in comment_lower:
             prefs["hates_long_texts"] = feedback.rating < 3
         if "quiz" in comment_lower or "exercice" in comment_lower:
-            behavioral["content_preference"] = "exercises" if feedback.rating >= 3 else "fiches"
+            behavioral["content_preference"] = (
+                "exercises" if feedback.rating >= 3 else "fiches"
+            )
         contextual["explicit_preferences"] = prefs
         action = "updated_content_preference"
 
@@ -155,9 +159,13 @@ def _apply_feedback_to_signals(db: Session, user_id: str, feedback: UserFeedback
 
     elif feedback.feedback_type == "session_quality":
         if feedback.rating >= 4:
-            behavioral["session_satisfaction"] = behavioral.get("session_satisfaction", 0.5) + 0.1
+            behavioral["session_satisfaction"] = (
+                behavioral.get("session_satisfaction", 0.5) + 0.1
+            )
         elif feedback.rating <= 2:
-            behavioral["session_satisfaction"] = behavioral.get("session_satisfaction", 0.5) - 0.1
+            behavioral["session_satisfaction"] = (
+                behavioral.get("session_satisfaction", 0.5) - 0.1
+            )
         action = "updated_session_satisfaction"
 
     elif feedback.feedback_type == "coach_message":
@@ -169,14 +177,22 @@ def _apply_feedback_to_signals(db: Session, user_id: str, feedback: UserFeedback
 
     elif feedback.feedback_type == "system_suggestion":
         if feedback.rating >= 4:
-            behavioral["recommendation_trust"] = behavioral.get("recommendation_trust", 0.5) + 0.1
+            behavioral["recommendation_trust"] = (
+                behavioral.get("recommendation_trust", 0.5) + 0.1
+            )
         elif feedback.rating <= 2:
-            behavioral["recommendation_trust"] = behavioral.get("recommendation_trust", 0.5) - 0.1
+            behavioral["recommendation_trust"] = (
+                behavioral.get("recommendation_trust", 0.5) - 0.1
+            )
         action = "updated_recommendation_trust"
 
     # Appliquer les limites
-    behavioral["session_satisfaction"] = max(0, min(1, behavioral.get("session_satisfaction", 0.5)))
-    behavioral["recommendation_trust"] = max(0, min(1, behavioral.get("recommendation_trust", 0.5)))
+    behavioral["session_satisfaction"] = max(
+        0, min(1, behavioral.get("session_satisfaction", 0.5))
+    )
+    behavioral["recommendation_trust"] = max(
+        0, min(1, behavioral.get("recommendation_trust", 0.5))
+    )
 
     signals.behavioral_signals = behavioral
     signals.contextual_signals = contextual

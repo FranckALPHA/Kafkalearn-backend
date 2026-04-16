@@ -3,6 +3,7 @@ services/search_suggestion_service.py
 =====================================
 Suggestions de recherche personnalisées.
 """
+
 import logging
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -28,6 +29,7 @@ class SearchSuggestionService(SearchBaseService):
         Utilise le cache Redis 24h.
         """
         from uuid import UUID
+
         user_uuid = UUID(user_id)
 
         # Vérifier le cache
@@ -55,8 +57,10 @@ class SearchSuggestionService(SearchBaseService):
             cache_entry.generated_at = datetime.utcnow()
             cache_entry.expires_at = expires_at
         else:
+            from uuid import UUID
+
             cache_entry = SearchSuggestionCache(
-                user_id=user_id,
+                user_id=UUID(user_id),
                 suggestions=suggestions,
                 generated_at=datetime.utcnow(),
                 expires_at=expires_at,
@@ -77,6 +81,7 @@ class SearchSuggestionService(SearchBaseService):
         Priorité : (1) recherches perso → (2) lacunes (depuis concept_graph) → (3) populaires globales → (4) défaut.
         """
         from uuid import UUID
+
         user_uuid = UUID(user_id)
 
         MAX_SUGGESTIONS = 10
@@ -96,7 +101,10 @@ class SearchSuggestionService(SearchBaseService):
         # 2. Lacunes depuis le graphe cognitif (concept_graph)
         lacune_tips = []
         try:
-            from app.modules.memory.services.concept_graph_service import ConceptGraphService
+            from app.modules.memory.services.concept_graph_service import (
+                ConceptGraphService,
+            )
+
             graph_svc = ConceptGraphService(self.db)
             lacunes = graph_svc.get_concepts_lacunes(user_id)
 

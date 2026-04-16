@@ -23,7 +23,7 @@ from app.modules.calendar.schemas.responses import (
     HeatmapResponse,
     CoachInsightsResponse,
 )
-from app.modules.calendar.models import CalendarSession
+from app.modules.calendar.models.calendar_session import CalendarSession
 from app.modules.calendar.routes.dependencies import (
     get_db,
     get_current_user,
@@ -67,11 +67,12 @@ async def list_sessions(
     )
 
     if date_debut:
-        query = query.filter(CalendarSession.planned_start >= datetime.fromisoformat(date_debut))
+        query = query.filter(CalendarSession.planned_start >= normaliser_date(date_debut))
     if date_fin:
-        query = query.filter(CalendarSession.planned_start <= datetime.fromisoformat(date_fin))
+        query = query.filter(CalendarSession.planned_start <= normaliser_date(date_fin))
     if status:
         query = query.filter(CalendarSession.status == status)
+
     if subject:
         query = query.filter(CalendarSession.subject == subject)
 

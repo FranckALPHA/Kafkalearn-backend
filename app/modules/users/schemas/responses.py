@@ -19,6 +19,7 @@ T = TypeVar("T")
 # Auth responses
 # ---------------------------------------------------------------------------
 
+
 class AuthResponse(BaseModel):
     """Tokens and user data returned after successful login / registration."""
 
@@ -55,14 +56,23 @@ class AuthResponse(BaseModel):
 # Profile responses
 # ---------------------------------------------------------------------------
 
+
 class UserProfileResponse(BaseModel):
     """Complete profile information for a user."""
 
-    id: str = Field(..., examples=["e17a3699-01a1-43ae-953c-335ea8ba42ef"], description="Identifiant UUID de l'utilisateur.")
-    email: str = Field(..., examples=["eleve@example.com"], description="Adresse e-mail.")
+    id: str = Field(
+        ...,
+        examples=["e17a3699-01a1-43ae-953c-335ea8ba42ef"],
+        description="Identifiant UUID de l'utilisateur.",
+    )
+    email: str = Field(
+        ..., examples=["eleve@example.com"], description="Adresse e-mail."
+    )
     prenom: str | None = Field(None, examples=["Jean"], description="Prenom.")
     nom: str | None = Field(None, examples=["Dupont"], description="Nom de famille.")
-    phone: str | None = Field(None, examples=["+237 6 12 34 56 78"], description="Telephone.")
+    phone: str | None = Field(
+        None, examples=["+237 6 12 34 56 78"], description="Telephone."
+    )
     classe: str | None = Field(None, examples=["Terminale C"], description="Classe.")
     serie: str | None = Field(None, examples=["C"], description="Serie scolaire.")
     region: str | None = Field(None, examples=["Centre"], description="Region.")
@@ -70,33 +80,43 @@ class UserProfileResponse(BaseModel):
         None, examples=["Lycee Leclerc"], description="Etablissement scolaire."
     )
     photo_url: str | None = Field(
-        None, examples=["https://storage.example.com/photos/1.jpg"], description="Photo de profil."
+        None,
+        examples=["https://storage.example.com/photos/1.jpg"],
+        description="Photo de profil.",
     )
     langue: str | None = Field(None, examples=["fr"], description="Langue prefer.")
-    email_verified: bool = Field(default=False, examples=[True], description="Compte verifie ou non.")
-    is_active: bool = Field(default=True, examples=[True], description="Compte actif ou suspendu.")
+    email_verified: bool = Field(
+        default=False, examples=[True], description="Compte verifie ou non."
+    )
+    is_active: bool = Field(
+        default=True, examples=[True], description="Compte actif ou suspendu."
+    )
     created_at: datetime | None = Field(
         default=None, examples=["2025-01-15T08:30:00Z"], description="Date de creation."
     )
 
     # --- Learning profile summary (aggregated) ---
-    streak_jours: int = Field(
-        default=0, examples=[7], description="Jours consecutifs d'affilee."
+    streak_jours: int | None = Field(
+        default=None, examples=[7], description="Jours consecutifs d'affilee."
     )
-    streak_max: int = Field(
-        default=0, examples=[21], description="Record de jours consecutifs."
+    streak_max: int | None = Field(
+        default=None, examples=[21], description="Record de jours consecutifs."
     )
-    score_global: float = Field(
-        default=0.0, examples=[78.5], ge=0, le=100, description="Score global en pourcentage."
+    score_global: float | None = Field(
+        default=None,
+        examples=[78.5],
+        ge=0,
+        le=100,
+        description="Score global en pourcentage.",
     )
-    total_sessions_etude: int = Field(
-        default=0, examples=[42], description="Nombre total de sessions d'etude."
+    total_sessions_etude: int | None = Field(
+        default=None, examples=[42], description="Nombre total de sessions d'etude."
     )
-    total_heures_etude: float = Field(
-        default=0.0, examples=[15.5], description="Heures totales d'etude."
+    total_heures_etude: float | None = Field(
+        default=None, examples=[15.5], description="Heures totales d'etude."
     )
-    nb_quiz_reussis: int = Field(
-        default=0, examples=[30], description="Nombre de quizzes reussis."
+    nb_quiz_reussis: int | None = Field(
+        default=None, examples=[30], description="Nombre de quizzes reussis."
     )
     learning_profile: dict | None = Field(
         default=None,
@@ -107,33 +127,39 @@ class UserProfileResponse(BaseModel):
 class ProfileStatsResponse(BaseModel):
     """Detailed learning statistics for the authenticated user."""
 
-    streak_jours: int = Field(
-        default=0, examples=[7], description="Jours consecutifs actuels."
+    streak_jours: int | None = Field(
+        default=None, examples=[7], description="Jours consecutifs actuels."
     )
-    streak_max: int = Field(
-        default=0, examples=[21], description="Record personnel de jours consecutifs."
+    streak_max: int | None = Field(
+        default=None,
+        examples=[21],
+        description="Record personnel de jours consecutifs.",
     )
-    score_global: float = Field(
-        default=0.0,
+    score_global: float | None = Field(
+        default=None,
         ge=0,
         le=100,
         examples=[78.5],
         description="Score global moyen en pourcentage.",
     )
-    total_sessions_etude: int = Field(
-        default=0, examples=[42], description="Nombre total de sessions terminees."
+    total_sessions_etude: int | None = Field(
+        default=None, examples=[42], description="Nombre total de sessions terminees."
     )
-    total_heures_etude: float = Field(
-        default=0.0, examples=[15.5], description="Heures totales passees sur la plateforme."
+    total_heures_etude: float | None = Field(
+        default=None,
+        examples=[15.5],
+        description="Heures totales passees sur la plateforme.",
     )
-    nb_quiz_reussis: int = Field(
-        default=0, examples=[30], description="Quiz reussis (score >= seuil de reussite)."
+    nb_quiz_reussis: int | None = Field(
+        default=None,
+        examples=[30],
+        description="Quiz reussis (score >= seuil de reussite).",
     )
-    nb_quiz_echoues: int = Field(
-        default=0, examples=[10], description="Nombre total de quizzes echoues."
+    nb_quiz_echoues: int | None = Field(
+        default=None, examples=[10], description="Nombre total de quizzes echoues."
     )
     derniere_activite: datetime | None = Field(
-        None,
+        default=None,
         examples=["2025-04-09T18:00:00Z"],
         description="Date de la derniere activite.",
     )
@@ -142,6 +168,7 @@ class ProfileStatsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Generic / utility responses
 # ---------------------------------------------------------------------------
+
 
 class MessageResponse(BaseModel):
     """Simple acknowledgement response."""

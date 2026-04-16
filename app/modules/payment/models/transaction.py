@@ -4,7 +4,14 @@ models/transaction.py
 Entité Transaction — paiements et transferts, traçabilité complète.
 """
 from sqlalchemy import (
-    Column, String, Integer, TIMESTAMP, CheckConstraint, Index, ForeignKey, func
+    Column,
+    String,
+    Integer,
+    CheckConstraint,
+    Index,
+    ForeignKey,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -12,11 +19,13 @@ import secrets
 import string
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class Transaction(Base, TimestampMixin):
+class Transaction(Base):
     __tablename__ = "transactions"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ─── Identité ────────────────────────────────────────────────
     id = Column(String(20), primary_key=True)

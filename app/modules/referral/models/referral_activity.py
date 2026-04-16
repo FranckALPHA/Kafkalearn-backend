@@ -4,18 +4,27 @@ models/referral_activity.py
 Tracks referral relationships and activation status.
 """
 from sqlalchemy import (
-    Column, String, Boolean, TIMESTAMP, Integer,
-    CheckConstraint, Index, ForeignKey, func
+    Column,
+    String,
+    Boolean,
+    Integer,
+    CheckConstraint,
+    Index,
+    ForeignKey,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class ReferralActivity(Base, TimestampMixin):
+class ReferralActivity(Base):
     __tablename__ = "referral_activities"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     referrer_id = Column(

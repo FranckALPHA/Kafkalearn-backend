@@ -4,18 +4,29 @@ models/pedagogical_asset.py
 Modele PedagogicalAsset pour le module library.
 """
 from sqlalchemy import (
-    Column, Integer, String, Boolean, Float, CheckConstraint,
-    Index, ForeignKey, func
+    Column,
+    Integer,
+    String,
+    Boolean,
+    Float,
+    CheckConstraint,
+    Index,
+    ForeignKey,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
+from app.modules.users.models.mixins import SoftDeleteMixin
 
 
-class PedagogicalAsset(Base, TimestampMixin):
+class PedagogicalAsset(Base, SoftDeleteMixin):
     __tablename__ = "pedagogical_assets"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ─── Identite ────────────────────────────────────────────────
     id = Column(Integer, primary_key=True, autoincrement=True)

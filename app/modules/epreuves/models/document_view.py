@@ -4,17 +4,23 @@ models/document_view.py
 Entité DocumentView — traçage des consultations et téléchargements.
 """
 from sqlalchemy import (
-    Column, Integer, String, Boolean, TIMESTAMP, CheckConstraint,
-    ForeignKey, Index, func
+    Column,
+    Integer,
+    String,
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class DocumentView(Base, TimestampMixin):
+class DocumentView(Base):
     __tablename__ = "document_views"
 
     # ─── Identité ────────────────────────────────────────────────

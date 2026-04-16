@@ -4,18 +4,29 @@ models/skill_usage_log.py
 Table skill_usage_logs — Journal d'utilisation des skills.
 """
 from sqlalchemy import (
-    Column, String, Text, Integer, Float, Boolean,
-    CheckConstraint, Index, ForeignKey
+    Column,
+    String,
+    Text,
+    Integer,
+    Float,
+    Boolean,
+    CheckConstraint,
+    Index,
+    ForeignKey,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class SkillUsageLog(Base, TimestampMixin):
+class SkillUsageLog(Base):
     __tablename__ = "skill_usage_logs"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ─── Identifiants ────────────────────────────────────────────
     id = Column(Integer, primary_key=True, autoincrement=True)

@@ -3,19 +3,33 @@ models/document.py
 ==================
 Entité Document — métadonnées des épreuves et documents pédagogiques.
 """
+
 from sqlalchemy import (
-    Column, Integer, String, Text, Boolean, Float, ForeignKey,
-    Index, CheckConstraint, func
+    Column,
+    Integer,
+    String,
+    Text,
+    Boolean,
+    Float,
+    ForeignKey,
+    Index,
+    CheckConstraint,
+    TIMESTAMP,
+    func,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class Document(Base, TimestampMixin):
+class Document(Base):
     __tablename__ = "documents"
+
+    created_at = Column(TIMESTAMP, default=func.now(), nullable=False)
+    updated_at = Column(
+        TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     # ─── Identité ────────────────────────────────────────────────
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -51,7 +65,7 @@ class Document(Base, TimestampMixin):
     difficulte_estimee = Column(
         String(10),
         CheckConstraint("difficulte_estimee IN ('facile','moyen','difficile')"),
-        nullable=True
+        nullable=True,
     )
     is_validated = Column(Boolean, default=False, nullable=False, index=True)
 
@@ -62,9 +76,11 @@ class Document(Base, TimestampMixin):
     metadata_confidence = Column(Float, nullable=True)
     ingest_status = Column(
         String(20),
-        CheckConstraint("ingest_status IN ('pending','processing','completed','failed')"),
+        CheckConstraint(
+            "ingest_status IN ('pending','processing','completed','failed')"
+        ),
         default="pending",
-        nullable=False
+        nullable=False,
     )
 
     # ─── Statistiques ────────────────────────────────────────────
@@ -75,10 +91,18 @@ class Document(Base, TimestampMixin):
     score_moyen_utilisateurs = Column(Float, nullable=True)
 
     # ─── Relations ───────────────────────────────────────────────
-    chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
-    playlist_items = relationship("PlaylistDocument", back_populates="document", cascade="all, delete-orphan")
-    views = relationship("DocumentView", back_populates="document", cascade="all, delete-orphan")
-    analyses = relationship("DocumentAnalysis", back_populates="document", cascade="all, delete-orphan")
+    chunks = relationship(
+        "DocumentChunk", back_populates="document", cascade="all, delete-orphan"
+    )
+    playlist_items = relationship(
+        "PlaylistDocument", back_populates="document", cascade="all, delete-orphan"
+    )
+    views = relationship(
+        "DocumentView", back_populates="document", cascade="all, delete-orphan"
+    )
+    analyses = relationship(
+        "DocumentAnalysis", back_populates="document", cascade="all, delete-orphan"
+    )
     user = relationship("User")
 
     # ─── Index composites ────────────────────────────────────────
@@ -93,7 +117,9 @@ class Document(Base, TimestampMixin):
     @property
     def is_ready_for_search(self) -> bool:
         """Le document est-il prêt pour la recherche vectorielle ?"""
-        return self.is_embedded and self.is_validated and self.ingest_status == "completed"
+        return (
+            self.is_embedded and self.is_validated and self.ingest_status == "completed"
+        )
 
     @property
     def download_available(self) -> bool:

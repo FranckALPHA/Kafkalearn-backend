@@ -3,18 +3,30 @@ models/notification_log.py
 ==========================
 Notification log for tracking sent notifications and read status.
 """
+
 from sqlalchemy import (
-    Column, String, Integer, Boolean, TIMESTAMP, Index, ForeignKey, func
+    Column,
+    String,
+    Integer,
+    Boolean,
+    TIMESTAMP,
+    Index,
+    ForeignKey,
+    func,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class NotificationLog(Base, TimestampMixin):
+class NotificationLog(Base):
     __tablename__ = "notification_logs"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(
+        TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(
@@ -59,5 +71,6 @@ class NotificationLog(Base, TimestampMixin):
     def mark_as_opened(self):
         """Mark notification as opened."""
         from sqlalchemy import func as sa_func
+
         self.is_read = True
         self.opened_at = sa_func.now()

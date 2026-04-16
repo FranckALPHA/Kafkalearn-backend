@@ -13,13 +13,18 @@ class SectionItemsResponse(BaseModel):
     section_title: str
     nb_items: int
     langue: str
-    current_index: int
+    current_item_index: int
     items: List[Dict[str, Any]]
 
 class ReviewTodayResponse(BaseModel):
     nb_sections_a_revoir: int
     temps_estime_minutes: int
     sections: List[Dict[str, Any]]
+
+class WeakSubject(BaseModel):
+    section_id: int
+    section_title: str
+    matiere: str
 
 class MemoryStatsResponse(BaseModel):
     total_sections: int
@@ -29,4 +34,4 @@ class MemoryStatsResponse(BaseModel):
     accuracy: float
     streak: int
     next_reviews_due: int
-    top_weak_subjects: List[str]
+    top_weak_subjects: List[WeakSubject]

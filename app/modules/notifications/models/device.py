@@ -4,18 +4,28 @@ models/device.py
 Device entity for push notification tokens and device metadata.
 """
 from sqlalchemy import (
-    Column, String, Text, Integer, Boolean, TIMESTAMP,
-    CheckConstraint, Index, ForeignKey, func
+    Column,
+    String,
+    Text,
+    Integer,
+    Boolean,
+    CheckConstraint,
+    Index,
+    ForeignKey,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class Device(Base, TimestampMixin):
+class Device(Base):
     __tablename__ = "devices"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(

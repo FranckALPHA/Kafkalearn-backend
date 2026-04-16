@@ -3,20 +3,31 @@ models/playlist.py
 ==================
 Entité Playlist — collections organisées de documents.
 """
+from datetime import datetime, timezone
 import uuid
 
 from sqlalchemy import (
-    Column, Integer, String, Text, Boolean, ForeignKey, Index
+    Column,
+    Integer,
+    String,
+    Text,
+    Boolean,
+    ForeignKey,
+    Index,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class Playlist(Base, TimestampMixin):
+class Playlist(Base):
     __tablename__ = "playlists"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ─── Identité ────────────────────────────────────────────────
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -50,6 +61,13 @@ class Playlist(Base, TimestampMixin):
         Index("idx_playlist_user_updated", "user_id", "updated_at"),
         Index("idx_public", "is_public", "created_at"),
     )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if not self.created_at:
+            self.created_at = datetime.now(timezone.utc)
+        if not self.updated_at:
+            self.updated_at = datetime.now(timezone.utc)
 
     # ─── Sérialisation ───────────────────────────────────────────
     def serialize_list_item(self) -> dict:

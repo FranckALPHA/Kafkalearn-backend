@@ -4,19 +4,32 @@ models/wisdom_user_interaction.py
 Modèle WisdomUserInteraction — Interactions utilisateur avec les conseils.
 """
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy import (
-    Column, String, Text, Integer, Float, Boolean, TIMESTAMP, DATE,
-    CheckConstraint, Index, ForeignKey, func, UniqueConstraint
+    Column,
+    String,
+    Text,
+    Integer,
+    Float,
+    Boolean,
+    DATE,
+    CheckConstraint,
+    Index,
+    ForeignKey,
+    UniqueConstraint,
+    TIMESTAMP,
+    func
 )
 
 
-class WisdomUserInteraction(Base, TimestampMixin):
+class WisdomUserInteraction(Base):
     """Trace les interactions d'un utilisateur avec un conseil de sagesse."""
 
     __tablename__ = "wisdom_user_interactions"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(

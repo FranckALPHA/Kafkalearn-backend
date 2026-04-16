@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, EmailStr, field_validator
 # Auth & registration
 # ---------------------------------------------------------------------------
 
+
 class UserRegisterRequest(BaseModel):
     """Payload to register a new user account."""
 
@@ -52,9 +53,13 @@ class UserRegisterRequest(BaseModel):
     @classmethod
     def password_must_be_strong(cls, v: str) -> str:
         if not any(c.isupper() for c in v):
-            raise ValueError("Le mot de passe doit contenir au moins une lettre majuscule.")
+            raise ValueError(
+                "Le mot de passe doit contenir au moins une lettre majuscule."
+            )
         if not any(c.islower() for c in v):
-            raise ValueError("Le mot de passe doit contenir au moins une lettre minuscule.")
+            raise ValueError(
+                "Le mot de passe doit contenir au moins une lettre minuscule."
+            )
         if not any(c.isdigit() for c in v):
             raise ValueError("Le mot de passe doit contenir au moins un chiffre.")
         return v
@@ -108,6 +113,7 @@ class RefreshTokenRequest(BaseModel):
 # Password management
 # ---------------------------------------------------------------------------
 
+
 class PasswordResetRequest(BaseModel):
     """Request to trigger a password-reset e-mail."""
 
@@ -145,9 +151,13 @@ class PasswordResetVerifyRequest(BaseModel):
     @classmethod
     def new_password_must_be_strong(cls, v: str) -> str:
         if not any(c.isupper() for c in v):
-            raise ValueError("Le mot de passe doit contenir au moins une lettre majuscule.")
+            raise ValueError(
+                "Le mot de passe doit contenir au moins une lettre majuscule."
+            )
         if not any(c.islower() for c in v):
-            raise ValueError("Le mot de passe doit contenir au moins une lettre minuscule.")
+            raise ValueError(
+                "Le mot de passe doit contenir au moins une lettre minuscule."
+            )
         if not any(c.isdigit() for c in v):
             raise ValueError("Le mot de passe doit contenir au moins un chiffre.")
         return v
@@ -175,9 +185,13 @@ class PasswordChangeRequest(BaseModel):
     @classmethod
     def new_password_must_be_strong(cls, v: str) -> str:
         if not any(c.isupper() for c in v):
-            raise ValueError("Le mot de passe doit contenir au moins une lettre majuscule.")
+            raise ValueError(
+                "Le mot de passe doit contenir au moins une lettre majuscule."
+            )
         if not any(c.islower() for c in v):
-            raise ValueError("Le mot de passe doit contenir au moins une lettre minuscule.")
+            raise ValueError(
+                "Le mot de passe doit contenir au moins une lettre minuscule."
+            )
         if not any(c.isdigit() for c in v):
             raise ValueError("Le mot de passe doit contenir au moins un chiffre.")
         return v
@@ -186,6 +200,7 @@ class PasswordChangeRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Profile & onboarding
 # ---------------------------------------------------------------------------
+
 
 class ProfileUpdateRequest(BaseModel):
     """Partial update of the authenticated user's profile. All fields optional."""
@@ -274,4 +289,57 @@ class OnboardingCompleteRequest(BaseModel):
         max_length=80,
         examples=["Physique"],
         description="Matiere dans laquelle l'eleve a des difficultes.",
+    )
+
+
+class FeedbackRequest(BaseModel):
+    """Payload to submit user feedback."""
+
+    feedback_type: str = Field(
+        ...,
+        max_length=30,
+        examples=[
+            "content_format",
+            "content_difficulty",
+            "session_quality",
+            "coach_message",
+            "system_suggestion",
+        ],
+        description="Type de feedback.",
+    )
+    rating: float | None = Field(
+        None,
+        ge=1,
+        le=5,
+        examples=[4.5],
+        description="Note entre 1 et 5 (optionnel).",
+    )
+    comment: str | None = Field(
+        None,
+        max_length=1000,
+        examples=["J'ai aimé les schémas explicatifs"],
+        description="Commentaire libre (optionnel).",
+    )
+    related_entity_type: str | None = Field(
+        None,
+        max_length=30,
+        examples=["quiz", "fiche", "exercise", "search", "coach"],
+        description="Type d'entité concernée (optionnel).",
+    )
+    related_entity_id: int | None = Field(
+        None,
+        examples=[123],
+        description="ID de l'entité concernée (optionnel).",
+    )
+    matiere: str | None = Field(
+        None,
+        max_length=100,
+        examples=["Mathématiques"],
+        description="Matière concernée (optionnel).",
+    )
+    concept: str | None = Field(
+        None,
+        max_length=200,
+        examples=["Dérivées"],
+        description="Concept concerné (optionnel).",
     )

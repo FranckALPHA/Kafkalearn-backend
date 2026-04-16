@@ -5,18 +5,28 @@ Entité MemoryItem — éléments individuels (flashcards, QCM, etc.).
 """
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import (
-    Column, Integer, String, Float, ForeignKey,
-    CheckConstraint, Index, UniqueConstraint, func
+    Column,
+    Integer,
+    String,
+    Float,
+    ForeignKey,
+    CheckConstraint,
+    Index,
+    UniqueConstraint,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class MemoryItem(Base, TimestampMixin):
+class MemoryItem(Base):
     __tablename__ = "memory_items"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ─── Identité ────────────────────────────────────────────────
     id = Column(Integer, primary_key=True, autoincrement=True)

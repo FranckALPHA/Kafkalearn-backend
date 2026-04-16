@@ -3,6 +3,7 @@ routes/admin.py
 ===============
 Admin endpoints for the ingest module.
 """
+
 import logging
 import os
 import tempfile
@@ -111,24 +112,40 @@ async def scan_folder(
     body: FolderScanRequest,
     current_user: User = Depends(get_current_superadmin),
     folder_scan_service=Depends(get_folder_scan_service),
+    db: Session = Depends(get_db),
 ):
     """Launch async folder scan. Returns scan_id."""
     import threading
+    from sqlalchemy.orm import Session
+    from app.core.database import SessionLocal
 
     job_id = folder_scan_service.lancer_scan_async(
         dossier_path=body.chemin_dossier,
         initiated_by=current_user.id,
     )
 
-    # Run scan in background thread
+    dossier_path = body.chemin_dossier
+
+    # Run scan in background thread with its own DB session
     def run_scan():
+        from app.modules.ingest.services.folder_scan_service import FolderScanService
+        from redis import Redis
+        from app.core.database import SessionLocal
+
+        thread_db = SessionLocal()
+        thread_redis = Redis.from_url("redis://localhost:6379/0")
+
         try:
-            folder_scan_service.scan_and_ingest_sync(
+            folder_svc = FolderScanService(db=thread_db, redis=thread_redis)
+            folder_svc.scan_and_ingest_sync(
                 job_id=job_id,
-                dossier_path=body.chemin_dossier,
+                dossier_path=dossier_path,
             )
         except Exception as exc:
             logger.error(f"Folder scan failed for job {job_id}: {exc}")
+        finally:
+            thread_db.close()
+            thread_redis.close()
 
     thread = threading.Thread(target=run_scan, daemon=True)
     thread.start()

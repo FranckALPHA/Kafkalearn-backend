@@ -3,23 +3,37 @@ models/document_chunk.py
 ========================
 Entité DocumentChunk — fragments de texte indexés pour le RAG.
 """
+
 from sqlalchemy import (
-    Column, Integer, Text, Boolean, ForeignKey, Index
+    Column,
+    Integer,
+    Text,
+    Boolean,
+    ForeignKey,
+    Index,
+    TIMESTAMP,
+    func,
 )
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class DocumentChunk(Base, TimestampMixin):
+class DocumentChunk(Base):
     __tablename__ = "document_chunks"
+
+    created_at = Column(TIMESTAMP, default=func.now(), nullable=False)
+    updated_at = Column(
+        TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     # ─── Identité ────────────────────────────────────────────────
     id = Column(Integer, primary_key=True, autoincrement=True)
     doc_id = Column(
-        Integer, ForeignKey("documents.id", ondelete="CASCADE"),
-        nullable=False, index=True
+        Integer,
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     texte_chunk = Column(Text, nullable=False)
     chunk_idx = Column(Integer, nullable=False)
@@ -54,4 +68,6 @@ class DocumentChunk(Base, TimestampMixin):
         }
 
     def __repr__(self) -> str:
-        return f"<DocumentChunk(id={self.id}, doc_id={self.doc_id}, idx={self.chunk_idx})>"
+        return (
+            f"<DocumentChunk(id={self.id}, doc_id={self.doc_id}, idx={self.chunk_idx})>"
+        )

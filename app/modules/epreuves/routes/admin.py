@@ -41,7 +41,7 @@ async def trigger_ingestion(
 
     try:
         from app.modules.epreuves.jobs.tasks import run_ingestion
-        run_ingestion.delay(document_id=doc_id)
+        run_ingestion.delay(doc_id=doc_id)
         return {"message": "Ingestion lancée", "document_id": doc_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"INGESTION_ERROR: {str(e)}")

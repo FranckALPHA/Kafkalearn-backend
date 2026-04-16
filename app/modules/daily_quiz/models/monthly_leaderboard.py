@@ -1,13 +1,28 @@
-from sqlalchemy import Column, Integer, String, Float, TIMESTAMP, ForeignKey, CheckConstraint, Index, UniqueConstraint
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    TIMESTAMP,
+    ForeignKey,
+    CheckConstraint,
+    Index,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class MonthlyLeaderboard(Base, TimestampMixin):
+class MonthlyLeaderboard(Base):
     __tablename__ = "monthly_leaderboard"
+
+    created_at = Column(TIMESTAMP, default=func.now(), nullable=False)
+    updated_at = Column(
+        TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(
@@ -80,7 +95,9 @@ class MonthlyLeaderboard(Base, TimestampMixin):
             "nb_perfect_scores": self.nb_perfect_scores,
             "meilleur_score_pct": self.meilleur_score_pct,
             "rang": self.rang,
-            "rang_calcule_at": self.rang_calcule_at.isoformat() if self.rang_calcule_at else None,
+            "rang_calcule_at": self.rang_calcule_at.isoformat()
+            if self.rang_calcule_at
+            else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

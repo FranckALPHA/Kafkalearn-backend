@@ -3,6 +3,7 @@ services/chat_service.py
 ========================
 Gestion des sessions et messages de chat.
 """
+
 import logging
 import uuid
 from typing import Optional, List, Dict, Any
@@ -66,10 +67,22 @@ class ChatService(SkillsBaseService):
         self.db.flush()
 
         # Message assistant
+        content = ""
+        if assistant_result.data:
+            content = (
+                assistant_result.data.get("titre", "")
+                or assistant_result.data.get("content", "")
+                or str(assistant_result.data)
+            )
+        elif hasattr(assistant_result, "content"):
+            content = assistant_result.content
+        elif assistant_result.json_data:
+            content = str(assistant_result.json_data)
+
         assistant_msg = ChatMessage(
             session_id=session_uuid,
             role="assistant",
-            content=assistant_result.data.get("titre", "") if assistant_result.data else "",
+            content=content[:1000],  # Limiter la longueur
             skill_utilise=skill_type,
             output_type=assistant_result.output_type,
             file_url=assistant_result.file_url,
@@ -82,7 +95,9 @@ class ChatService(SkillsBaseService):
         self.db.add(assistant_msg)
 
         # Mettre à jour la session
-        session = self.db.query(ChatSession).filter(ChatSession.id == session_uuid).first()
+        session = (
+            self.db.query(ChatSession).filter(ChatSession.id == session_uuid).first()
+        )
         if session:
             session.nb_messages += 2
             session.increment_generation(success=assistant_result.success)
@@ -135,9 +150,7 @@ class ChatService(SkillsBaseService):
         )
         return [s.serialize_list_item() for s in sessions]
 
-    def get_messages(
-        self, session_id: str, limit: int = 100
-    ) -> List[Dict[str, Any]]:
+    def get_messages(self, session_id: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Récupère les messages d'une session."""
         from uuid import UUID
 

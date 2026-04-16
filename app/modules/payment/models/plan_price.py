@@ -3,14 +3,16 @@ models/plan_price.py
 ====================
 Grille tarifaire des plans — source unique de vérité pour les prix.
 """
-from sqlalchemy import Column, String, Integer, Boolean, CheckConstraint
+from sqlalchemy import Column, String, Integer, Boolean, CheckConstraint, TIMESTAMP, func
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class PlanPrice(Base, TimestampMixin):
+class PlanPrice(Base):
     __tablename__ = "plan_prices"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ─── Identité ────────────────────────────────────────────────
     plan_id = Column(String(20), primary_key=True)

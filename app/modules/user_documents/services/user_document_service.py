@@ -77,6 +77,7 @@ class UserDocumentService(UserDocumentsBaseService):
         )
 
         # 5. Create UserDocument record
+        now = datetime.now(timezone.utc)
         doc = UserDocument(
             user_id=user_id,
             titre=titre,
@@ -91,10 +92,17 @@ class UserDocumentService(UserDocumentsBaseService):
             hash_contenu=sha256_hash,
             extraction_status="pending",
             vectorization_status="pending",
+            created_at=now,
+            updated_at=now,
         )
-        self.db.add(doc)
-        self.db.commit()
-        self.db.refresh(doc)
+        try:
+            self.db.add(doc)
+            self.db.commit()
+            self.db.refresh(doc)
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error saving UserDocument: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"DATABASE_ERROR: {str(e)}")
 
         # 6. Queue extraction task
         if CELERY_EXTRACT_AVAILABLE and extract_document_text_task is not None:

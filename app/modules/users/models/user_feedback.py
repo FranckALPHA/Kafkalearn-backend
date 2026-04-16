@@ -4,28 +4,44 @@ models/user_feedback.py
 Feedback explicite de l'utilisateur — ce qu'il dit directement au système.
 C'est de l'or pur : l'utilisateur est le meilleur signal sur lui-même.
 """
+
 from sqlalchemy import (
-    Column, Integer, Float, String, Text, ForeignKey,
-    CheckConstraint, Index, TIMESTAMP, func
+    Column,
+    Integer,
+    Float,
+    String,
+    Text,
+    ForeignKey,
+    CheckConstraint,
+    Index,
+    TIMESTAMP,
+    func,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class UserFeedback(Base, TimestampMixin):
+class UserFeedback(Base):
     """
     Feedback explicite sur un contenu, une session, ou le système en général.
     Utilisé pour mettre à jour immédiatement le profil comportemental.
     """
+
     __tablename__ = "user_feedback"
+
+    created_at = Column(TIMESTAMP, default=func.now(), nullable=False)
+    updated_at = Column(
+        TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Quoi ?
@@ -41,7 +57,9 @@ class UserFeedback(Base, TimestampMixin):
     comment = Column(Text, nullable=True)  # libre
 
     # Contexte
-    related_entity_type = Column(String(30), nullable=True)  # "quiz", "fiche", "exercise", "search", "coach"
+    related_entity_type = Column(
+        String(30), nullable=True
+    )  # "quiz", "fiche", "exercise", "search", "coach"
     related_entity_id = Column(Integer, nullable=True)
     matiere = Column(String(100), nullable=True)
     concept = Column(String(200), nullable=True)
@@ -56,7 +74,9 @@ class UserFeedback(Base, TimestampMixin):
     user = relationship("User")
 
     __table_args__ = (
-        CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 5", name="chk_feedback_rating_range"),
+        CheckConstraint(
+            "rating IS NULL OR rating BETWEEN 1 AND 5", name="chk_feedback_rating_range"
+        ),
         Index("idx_feedback_user", "user_id", "created_at"),
         Index("idx_feedback_type", "feedback_type"),
     )

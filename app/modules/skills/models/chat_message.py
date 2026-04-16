@@ -1,23 +1,25 @@
 """
 models/chat_message.py
 ======================
-Table chat_messages — Messages individuels dans une session.
+Table chat_messages — Messages individuels dans une session chat.
 """
-from sqlalchemy import (
-    Column, String, Text, Integer, SMALLINT, TIMESTAMP,
-    CheckConstraint, Index, ForeignKey
-)
+
+from datetime import datetime, timezone
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, Index, TIMESTAMP, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class ChatMessage(Base, TimestampMixin):
+class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
-    # ─── Identifiants ────────────────────────────────────────────
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(
+        TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     session_id = Column(
         UUID(as_uuid=True),
@@ -25,63 +27,50 @@ class ChatMessage(Base, TimestampMixin):
         nullable=False,
         index=True,
     )
-
-    # ─── Contenu message ─────────────────────────────────────────
-    role = Column(
-        String(10),
-        CheckConstraint("role IN ('user','assistant','system')"),
-        nullable=False,
-    )
+    role = Column(String(20), nullable=False)  # 'user' or 'assistant'
     content = Column(Text, nullable=False)
 
-    # ─── Métadonnées génération (assistant uniquement) ───────────
-    skill_utilise = Column(String(20), nullable=True)
-    output_type = Column(
-        String(10),
-        CheckConstraint("output_type IN ('text','pdf','json','png')"),
-        nullable=True,
-    )
-    file_url = Column(String(500), nullable=True)
+    # Metadata skill
+    skill_utilise = Column(String(50), nullable=True)
+    output_type = Column(String(20), nullable=True)
+    file_url = Column(String(255), nullable=True)
     json_data = Column(JSONB, nullable=True)
-
-    # ─── Contexte pédagogique ────────────────────────────────────
-    matiere = Column(String(100), nullable=True, index=True)
+    matiere = Column(String(100), nullable=True)
     niveau = Column(String(50), nullable=True)
-
-    # ─── Métriques performance ───────────────────────────────────
     latence_ms = Column(Integer, nullable=True)
     tokens_utilises = Column(Integer, nullable=True)
-    llm_provider = Column(String(20), nullable=True)
+    llm_provider = Column(String(50), nullable=True)
 
-    # ─── Feedback utilisateur ────────────────────────────────────
-    feedback = Column(
-        SMALLINT, CheckConstraint("feedback IN (-1, 1)"), nullable=True
-    )
+    # Feedback
+    feedback = Column(Integer, nullable=True)  # 1, 0, -1
     feedback_at = Column(TIMESTAMP, nullable=True)
 
-    # ─── Gestion erreurs ─────────────────────────────────────────
+    # Tracking
     erreur_code = Column(String(50), nullable=True)
+    idempotency_key = Column(String(100), nullable=True, index=True)
 
-    # ─── Idempotency ─────────────────────────────────────────────
-    idempotency_key = Column(String(100), unique=True, nullable=True, index=True)
-
-    # ─── Relations ───────────────────────────────────────────────
     session = relationship("ChatSession", back_populates="messages")
 
-    # ─── Index composites ────────────────────────────────────────
-    __table_args__ = (
-        Index("idx_session_created", "session_id", "created_at"),
-        Index("idx_feedback_skill", "skill_utilise", "feedback"),
-    )
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if not self.created_at:
+            self.created_at = datetime.now(timezone.utc)
+        if not self.updated_at:
+            self.updated_at = datetime.now(timezone.utc)
 
-    # ─── Méthodes utilitaires ────────────────────────────────────
-    def is_assistant_message(self) -> bool:
-        return self.role == "assistant"
-
-    def has_generated_content(self) -> bool:
-        return self.is_assistant_message() and (self.file_url or self.json_data or self.content)
+    def serialize(self) -> dict:
+        return {
+            "id": self.id,
+            "session_id": str(self.session_id),
+            "role": self.role,
+            "content": self.content,
+            "skill_utilise": self.skill_utilise,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
     def serialize_for_chat(self) -> dict:
+        """Format spécifique pour l'API chat."""
         return {
             "id": self.id,
             "role": self.role,
@@ -89,10 +78,10 @@ class ChatMessage(Base, TimestampMixin):
             "skill_utilise": self.skill_utilise,
             "output_type": self.output_type,
             "file_url": self.file_url,
-            "json_data": self.json_data if self.output_type == "json" else None,
-            "feedback": self.feedback,
+            "json_data": self.json_data,
+            "matiere": self.matiere,
+            "niveau": self.niveau,
+            "latence_ms": self.latence_ms,
+            "erreur_code": self.erreur_code,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
-
-    def __repr__(self) -> str:
-        return f"<ChatMessage(id={self.id}, role='{self.role}', session_id={self.session_id})>"

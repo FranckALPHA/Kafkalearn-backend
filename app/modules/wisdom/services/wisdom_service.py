@@ -68,14 +68,14 @@ class WisdomService(WisdomBaseService):
         return tip.serialize(langue=langue)
 
     async def generer_wisdom_du_jour(self, date_str: str) -> dict | None:
-        """Genere un wisdom tip via LLM, valide le JSON, detecte la categorie, sauvegarde en DB."""
+        """Genere un wisdom tip via LLM (Ollama local), valide le JSON, detecte la categorie, sauvegarde en DB."""
         try:
             target_date = date.fromisoformat(date_str)
         except ValueError:
             logger.error("Format de date invalide: %s", date_str)
             return None
 
-        # Tentative de generation via LLM
+        # Tentative de generation via LLM (Ollama local)
         try:
             from app.modules.skills.utils.llm_client import LLMClient
 
@@ -85,8 +85,8 @@ class WisdomService(WisdomBaseService):
                 "Retourne UNIQUEMENT un JSON valide avec cette structure: "
                 '{"fr": {"text": "...", "author": "..."}, "en": {"text": "...", "author": "..."}}'
             )
-            response = await llm.generate(prompt)
-            raw_content = response if isinstance(response, str) else response.get("content", "")
+            response = await llm.generate(prompt, response_format="json")
+            raw_content = response.get("text", "") if isinstance(response, dict) else str(response)
 
             # Extraire le JSON du texte de reponse
             json_start = raw_content.find("{")

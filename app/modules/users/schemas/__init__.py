@@ -3,6 +3,7 @@ schemas/__init__.py
 ===================
 Export des schémas Pydantic du module users.
 """
+
 from .requests import (
     UserRegisterRequest,
     LoginRequest,
@@ -12,6 +13,7 @@ from .requests import (
     ProfileUpdateRequest,
     OnboardingCompleteRequest,
     RefreshTokenRequest,
+    FeedbackRequest,
 )
 from .responses import (
     AuthResponse,
@@ -31,6 +33,7 @@ __all__ = [
     "ProfileUpdateRequest",
     "OnboardingCompleteRequest",
     "RefreshTokenRequest",
+    "FeedbackRequest",
     "AuthResponse",
     "UserProfileResponse",
     "ProfileStatsResponse",

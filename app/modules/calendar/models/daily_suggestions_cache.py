@@ -5,18 +5,28 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class DailySuggestionsCache(TimestampMixin, Base):
+class DailySuggestionsCache(Base):
     __tablename__ = "daily_suggestions_cache"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    date_suggestion = Column(DATE, nullable=False)
+    date_suggestion = Column(DATE, nullable=False, index=True)
     suggestions_json = Column(JSONB, nullable=False)
-    matieres_du_jour = Column(JSONB, default=list, nullable=False)
-    generated_at = Column(TIMESTAMP, server_default=func.now())
+    matieres_du_jour = Column(JSONB, nullable=False)
+    generated_at = Column(TIMESTAMP, default=func.now())
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if not self.created_at:
+            self.created_at = datetime.now(timezone.utc)
+        if not self.updated_at:
+            self.updated_at = datetime.now(timezone.utc)
+
 
     __table_args__ = (
         UniqueConstraint(

@@ -4,18 +4,28 @@ models/analysis_feedback.py
 Modèle SQLAlchemy pour les retours utilisateurs sur les analyses de documents.
 """
 from sqlalchemy import (
-    Column, String, Integer, Boolean, TIMESTAMP,
-    CheckConstraint, Index, UniqueConstraint, ForeignKey, func
+    Column,
+    String,
+    Integer,
+    Boolean,
+    CheckConstraint,
+    Index,
+    UniqueConstraint,
+    ForeignKey,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class AnalysisFeedback(Base, TimestampMixin):
+class AnalysisFeedback(Base):
     __tablename__ = "analysis_feedback"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     analysis_id = Column(

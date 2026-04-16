@@ -4,17 +4,27 @@ models/asset_rating.py
 Modele AssetRating pour les evaluations des assets pedagogiques.
 """
 from sqlalchemy import (
-    Column, Integer, String, CheckConstraint, Index, ForeignKey, UniqueConstraint
+    Column,
+    Integer,
+    String,
+    CheckConstraint,
+    Index,
+    ForeignKey,
+    UniqueConstraint,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class AssetRating(Base, TimestampMixin):
+class AssetRating(Base):
     __tablename__ = "asset_ratings"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ─── Identite ────────────────────────────────────────────────
     id = Column(Integer, primary_key=True, autoincrement=True)

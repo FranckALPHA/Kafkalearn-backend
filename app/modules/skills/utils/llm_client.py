@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import Optional, List, Dict, Any
+import json
 import time
 import httpx
 import logging
@@ -77,17 +78,13 @@ class LLMClient:
     ) -> Dict[str, Any]:
         """
         Génère une réponse via le provider spécifié (ou default).
-        
-        Returns:
-            {
-                "text": str,
-                "tokens_used": int,
-                "provider": str,
-                "latency_ms": int,
-                "error_code": Optional[str]
-            }
+        Stratégie de fallback :
+          - 429 (rate limit) → fallback vers Ollama
+          - Réponse JSON invalide → retry OpenRouter
+          - Autres erreurs → fallback vers Ollama
         """
         provider = provider or self.default_provider
+        max_openrouter_retries = 3
 
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
@@ -108,47 +105,87 @@ class LLMClient:
         logger.info("LLM call requested: provider=%s, model=%s", provider.value,
                     self.ollama_model if provider == LLMProvider.OLLAMA else self.openrouter_model)
 
-        try:
+        # ─── Ollama direct ──────────────────────────────────────
+        if provider == LLMProvider.OLLAMA:
+            logger.info("LLM provider called: Ollama (%s)", self.ollama_model)
             try:
-                if provider == LLMProvider.OLLAMA:
-                    logger.info("LLM provider called: Ollama (%s)", self.ollama_model)
-                    result = await self._call_ollama(messages, temperature, max_tokens, response_format)
-                    used_provider = LLMProvider.OLLAMA.value
-                elif provider == LLMProvider.OPENROUTER:
-                    logger.info("LLM provider called: OpenRouter (%s)", self.openrouter_model)
-                    result = await self._call_openrouter(messages, temperature, max_tokens, response_format)
-                    used_provider = LLMProvider.OPENROUTER.value
-                else:
-                    logger.info("LLM provider called: OpenRouter (fallback from %s)", provider.value)
-                    result = await self._call_openrouter(messages, temperature, max_tokens, response_format)
-                    used_provider = LLMProvider.OPENROUTER.value
-            except Exception as e:
-                # Fallback to Ollama if primary fails
-                logger.warning("LLM provider %s failed: %s, fallback to Ollama", provider.value, e)
-                logger.info("LLM provider called: Ollama (%s) [fallback]", self.ollama_model)
                 result = await self._call_ollama(messages, temperature, max_tokens, response_format)
                 used_provider = LLMProvider.OLLAMA.value
-            
+                latency_ms = int(time.time() * 1000 - start_ms)
+                return {
+                    **result,
+                    "provider": used_provider,
+                    "latency_ms": latency_ms,
+                    "error_code": None
+                }
+            except Exception as e:
+                logger.error("Ollama generation error: %s", e)
+                return {"error_code": "LLM_ERROR", "provider": "ollama"}
+
+        # ─── OpenRouter with retry for invalid JSON, fallback to Ollama for 429 ──
+        openrouter_retries = 0
+        last_error = None
+
+        while openrouter_retries < max_openrouter_retries:
+            try:
+                logger.info("LLM provider called: OpenRouter (%s) [attempt %d/%d]",
+                            self.openrouter_model, openrouter_retries + 1, max_openrouter_retries)
+                result = await self._call_openrouter(messages, temperature, max_tokens, response_format)
+
+                # If we need JSON, validate it
+                if response_format == "json":
+                    text = result.get("text", "")
+                    clean = text.replace("```json", "").replace("```", "").strip()
+                    try:
+                        json.loads(clean)
+                    except (json.JSONDecodeError, ValueError):
+                        openrouter_retries += 1
+                        logger.warning("Invalid JSON from OpenRouter (attempt %d), retrying...", openrouter_retries)
+                        last_error = "INVALID_JSON"
+                        continue  # retry OpenRouter
+
+                # Valid JSON or no JSON check needed
+                latency_ms = int(time.time() * 1000 - start_ms)
+                return {
+                    **result,
+                    "provider": LLMProvider.OPENROUTER.value,
+                    "latency_ms": latency_ms,
+                    "error_code": None
+                }
+
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    # Rate limited → fallback to Ollama
+                    logger.warning("OpenRouter rate limited (429), fallback to Ollama")
+                    break  # exit retry loop, go to Ollama fallback
+                elif e.response.status_code in {401, 402, 403}:
+                    # Auth error → fallback to Ollama
+                    logger.warning("OpenRouter auth error (%d), fallback to Ollama", e.response.status_code)
+                    break
+                else:
+                    logger.error("OpenRouter HTTP %d: %s", e.response.status_code, e.response.text)
+                    last_error = f"HTTP_{e.response.status_code}"
+                    openrouter_retries += 1
+
+            except Exception as e:
+                logger.warning("OpenRouter error: %s", e)
+                last_error = str(e)
+                openrouter_retries += 1
+
+        # ─── Fallback to Ollama ─────────────────────────────────
+        logger.info("LLM provider called: Ollama (%s) [fallback from OpenRouter]", self.ollama_model)
+        try:
+            result = await self._call_ollama(messages, temperature, max_tokens, response_format)
             latency_ms = int(time.time() * 1000 - start_ms)
             return {
                 **result,
-                "provider": used_provider,
+                "provider": LLMProvider.OLLAMA.value,
                 "latency_ms": latency_ms,
                 "error_code": None
             }
-            
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429:
-                return {"error_code": "QUOTA_LLM", "provider": provider.value}
-            elif e.response.status_code == 401:
-                return {"error_code": "API_KEY_INVALID", "provider": provider.value}
-            else:
-                logger.error(f"LLM HTTP {e.response.status_code}: {e.response.text}")
-                return {"error_code": "LLM_HTTP_ERROR", "provider": provider.value}
-                
         except Exception as e:
-            logger.error(f"LLM generation error: {e}", exc_info=True)
-            return {"error_code": "LLM_ERROR", "provider": provider.value}
+            logger.error("Ollama fallback error: %s", e)
+            return {"error_code": "LLM_ERROR", "provider": "ollama"}
     
     async def _call_gemini(self, messages, system_instruction, temperature, max_tokens, response_format):
         """Appel API Gemini avec formatage spécifique."""
@@ -274,8 +311,8 @@ class LLMClient:
 
     async def _call_ollama(self, messages, temperature, max_tokens, response_format):
         """Fallback local via Ollama quand OpenRouter échoue."""
-        # Hardcode known good model - env vars may be stale in PM2
-        model = "qwen2.5:1.5b"
+        # Use the correct available model
+        model = "qwen2.5:7b"
         payload = {
             "model": model,
             "messages": messages,

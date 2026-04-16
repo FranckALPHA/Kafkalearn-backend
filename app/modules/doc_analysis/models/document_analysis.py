@@ -7,18 +7,30 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
-    Column, String, Text, Integer, Float, Boolean, TIMESTAMP,
-    CheckConstraint, Index, UniqueConstraint, ForeignKey, func
+    Column,
+    String,
+    Text,
+    Integer,
+    Float,
+    Boolean,
+    CheckConstraint,
+    Index,
+    UniqueConstraint,
+    ForeignKey,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class DocumentAnalysis(Base, TimestampMixin):
+class DocumentAnalysis(Base):
     __tablename__ = "document_analyses"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     document_id = Column(

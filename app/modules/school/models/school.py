@@ -6,7 +6,6 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
 def _generate_short_id() -> str:
@@ -22,8 +21,11 @@ def _generate_invitation_code() -> str:
     return f"{part1}-{part2}"
 
 
-class School(Base, TimestampMixin):
+class School(Base):
     __tablename__ = "schools"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(String(8), primary_key=True, default=_generate_short_id)
     nom = Column(String(255), nullable=False)

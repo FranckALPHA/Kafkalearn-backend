@@ -307,7 +307,7 @@ async def get_ambiguous_notions(
         FROM concept_graph
         WHERE user_id IS NULL
           AND source_type = 'document_analysis'
-          AND context->>'ambiguous' = 'true'
+          AND (context::jsonb)->>'ambiguous' = 'true'
         ORDER BY created_at DESC
         LIMIT 100
     """)).fetchall()

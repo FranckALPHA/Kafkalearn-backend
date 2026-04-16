@@ -8,14 +8,21 @@ Deux couches :
 """
 import uuid
 from sqlalchemy import (
-    Column, String, Text, Float, ForeignKey,
-    CheckConstraint, Index, UniqueConstraint, TIMESTAMP, func
+    Column,
+    String,
+    Text,
+    Float,
+    ForeignKey,
+    CheckConstraint,
+    Index,
+    UniqueConstraint,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
 # ─── Types de relations ──────────────────────────────────────────
@@ -28,8 +35,11 @@ RELATION_TYPES = [
 ]
 
 
-class ConceptGraph(Base, TimestampMixin):
+class ConceptGraph(Base):
     __tablename__ = "concept_graph"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ─── Identité ────────────────────────────────────────────────
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

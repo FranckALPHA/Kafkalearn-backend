@@ -14,6 +14,7 @@ Endpoints principaux pour l'exécution des skills IA.
 **Détection automatique** : si `skill` n'est pas précisé, l'IA détecte l'intention
 depuis le prompt (ex: "explique les dérivées" → tuteur, "quiz sur les intégrales" → quiz).
 """
+
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -42,7 +43,11 @@ from app.modules.skills.routes.dependencies import (
 )
 from app.modules.skills.models import QuizSession
 from app.modules.users.models import User
-from app.modules.skills.utils.constants import SKILL_CATALOG, PLAN_HIERARCHY, PLAN_REQUIREMENTS
+from app.modules.skills.utils.constants import (
+    SKILL_CATALOG,
+    PLAN_HIERARCHY,
+    PLAN_REQUIREMENTS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +57,35 @@ router = APIRouter(prefix="/skills", tags=["Skills"])
 def _is_plan_sufficient(user_plan: str, required_plan: str) -> bool:
     """Vérifie si le plan utilisateur est suffisant."""
     user_level = PLAN_HIERARCHY.index(user_plan) if user_plan in PLAN_HIERARCHY else 0
-    required_level = PLAN_HIERARCHY.index(required_plan) if required_plan in PLAN_HIERARCHY else 0
+    required_level = (
+        PLAN_HIERARCHY.index(required_plan) if required_plan in PLAN_HIERARCHY else 0
+    )
     return user_level >= required_level
+
+
+def _detect_context_from_chat(user_id: str, message: str):
+    """Détecte le contexte (urgence, préférences) depuis le message utilisateur."""
+    try:
+        # Cette fonction analyse le message pour détecter:
+        # - Urgence (ex: "pour demain", "urgent")
+        # - Préférences de style d'apprentissage
+        # - Niveau de difficulté
+        # Pour l'instant, c'est une implémentation simplifiée
+        logger.info(f"Analyse contexte pour user {user_id}: {message[:100]}...")
+
+        # Détection basique d'urgence
+        urgent_keywords = ["urgent", "urgence", "pour demain", "rapide", "vite", "asap"]
+        message_lower = message.lower()
+        is_urgent = any(keyword in message_lower for keyword in urgent_keywords)
+
+        if is_urgent:
+            logger.info(f"Message détecté comme urgent pour user {user_id}")
+
+        # On pourrait enregistrer ces préférences dans le profil utilisateur
+        # Pour l'instant, on se contente de logger
+
+    except Exception as e:
+        logger.warning(f"Failed to detect context from chat: {e}")
 
 
 @router.post(
@@ -90,6 +122,7 @@ def _is_plan_sufficient(user_plan: str, required_plan: str) -> bool:
 )
 async def run_skill(
     payload: SkillRunRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     dispatcher=Depends(get_skill_dispatcher),
@@ -166,8 +199,7 @@ async def run_skill(
         await idempotency.marquer_complete(idempotency_key, result.model_dump())
 
         # Background: enrichissement profil + extraction concepts + contexte
-        background = BackgroundTasks()
-        background.add_task(
+        background_tasks.add_task(
             _enqueue_skill_enrichment,
             user_id=str(current_user.id),
             skill_type=skill_type,
@@ -175,14 +207,14 @@ async def run_skill(
             succes=result.success,
         )
         # Background: extraction des concepts du chat vers le graphe cognitif
-        background.add_task(
+        background_tasks.add_task(
             _enqueue_concept_extraction,
             user_id=str(current_user.id),
             user_message=payload.prompt,
-            llm_response=result.content or "",
+            llm_response=getattr(result, "content", str(result.data)) or "",
         )
         # Background: détection contexte (urgence, préférences) depuis le message
-        background.add_task(
+        background_tasks.add_task(
             _detect_context_from_chat,
             user_id=str(current_user.id),
             message=payload.prompt,
@@ -199,7 +231,9 @@ async def run_skill(
     except Exception as e:
         logger.error(f"Skill execution failed: {e}", exc_info=True)
         await idempotency.liberrer_key(idempotency_key)
-        raise HTTPException(status_code=422, detail="SKILL_FAILED")
+        # Retourner plus d'informations pour le débogage
+        error_detail = f"SKILL_FAILED: {str(e)}"
+        raise HTTPException(status_code=422, detail=error_detail)
 
 
 @router.post(
@@ -234,10 +268,15 @@ async def submit_quiz_answers(
     """Submit quiz answers → correction + cognitive graph enrichment."""
     from uuid import UUID
 
+    try:
+        quiz_uuid = UUID(quiz_session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="QUIZ_ID_INVALID")
+
     quiz_session = (
         db.query(QuizSession)
         .filter(
-            QuizSession.id == UUID(quiz_session_id),
+            QuizSession.id == quiz_uuid,
             QuizSession.user_id == current_user.id,
         )
         .first()
@@ -278,17 +317,23 @@ async def list_available_skills(
     """Catalogue des skills disponibles selon le plan utilisateur."""
     skills = []
     for skill_type, info in SKILL_CATALOG.items():
-        disponible = _is_plan_sufficient(current_user.plan_effectif, info["plan_requis"])
-        skills.append({
-            "type": skill_type,
-            "nom": info["nom"],
-            "description": info["description"],
-            "output_type": info["output_type"],
-            "plan_requis": info["plan_requis"],
-            "disponible": disponible,
-            "raison_indisponible": None if disponible else f"Plan {info['plan_requis'].capitalize()} requis",
-            "exemple_prompt": info["exemple_prompt"],
-        })
+        disponible = _is_plan_sufficient(
+            current_user.plan_effectif, info["plan_requis"]
+        )
+        skills.append(
+            {
+                "type": skill_type,
+                "nom": info["nom"],
+                "description": info["description"],
+                "output_type": info["output_type"],
+                "plan_requis": info["plan_requis"],
+                "disponible": disponible,
+                "raison_indisponible": None
+                if disponible
+                else f"Plan {info['plan_requis'].capitalize()} requis",
+                "exemple_prompt": info["exemple_prompt"],
+            }
+        )
 
     return {"skills": skills}
 
@@ -314,24 +359,39 @@ async def detect_skill_intention(
     # Extraction paramètres basique
     params = {}
     if skill_detected:
-        if match := re.search(r"(Mathématiques|Physique|Chimie|SVT|Français|Anglais|Philosophie|Histoire)", payload.texte, re.I):
+        if match := re.search(
+            r"(Mathématiques|Physique|Chimie|SVT|Français|Anglais|Philosophie|Histoire)",
+            payload.texte,
+            re.I,
+        ):
             params["matiere"] = match.group(1)
-        if match := re.search(r"(Tle|Terminale|Première|Seconde|3ème|Troisième|Form \d+)", payload.texte, re.I):
+        if match := re.search(
+            r"(Tle|Terminale|Première|Seconde|3ème|Troisième|Form \d+)",
+            payload.texte,
+            re.I,
+        ):
             params["niveau"] = match.group(1)
 
     return {
         "skill_detecte": skill_detected,
-        "confidence": "high" if method == "regex" else "medium" if method == "llm" else "low",
+        "confidence": "high"
+        if method == "regex"
+        else "medium"
+        if method == "llm"
+        else "low",
         "methode": method or "fallback",
         "params_extraits": params,
         "alternatives": ["tuteur"] if not skill_detected else [],
     }
 
 
-def _enqueue_skill_enrichment(user_id: str, skill_type: str, matiere: str, succes: bool):
+def _enqueue_skill_enrichment(
+    user_id: str, skill_type: str, matiere: str, succes: bool
+):
     """Enqueue skill enrichment task for user profile."""
     try:
         from app.modules.skills.jobs.tasks import enrich_profile_after_skill_task
+
         enrich_profile_after_skill_task.delay(
             user_id=user_id,
             skill_type=skill_type,
@@ -342,10 +402,13 @@ def _enqueue_skill_enrichment(user_id: str, skill_type: str, matiere: str, succe
         logger.warning(f"Failed to enqueue skill enrichment: {e}")
 
 
-def _enqueue_quiz_enrichment(user_id: str, matiere: str, score: float, lacune_notion: str = None):
+def _enqueue_quiz_enrichment(
+    user_id: str, matiere: str, score: float, lacune_notion: str = None
+):
     """Enqueue quiz correction enrichment task for user profile (lacunes + scores)."""
     try:
         from app.modules.skills.jobs.tasks import enrich_profile_after_skill_task
+
         enrich_profile_after_skill_task.delay(
             user_id=user_id,
             skill_type="quiz",
@@ -362,6 +425,7 @@ def _enqueue_concept_extraction(user_id: str, user_message: str, llm_response: s
     """Enqueue concept extraction task for cognitive graph enrichment."""
     try:
         from app.modules.memory.jobs.tasks import extract_concepts_from_chat_task
+
         extract_concepts_from_chat_task.delay(
             message_id=0,  # Placeholder — le message_id réel n'est pas critique
             user_id=user_id,

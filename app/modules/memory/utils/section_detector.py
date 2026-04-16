@@ -118,7 +118,7 @@ def detect_sections_from_text(
     return sections
 
 
-def detect_sections_llm_fallback(texte: str) -> List[Dict]:
+def detect_sections_llm_fallback(texte: str) -> List[dict]:
     """
     Fallback LLM pour détecter les sections quand les regex échouent.
     Utilisé uniquement si detect_sections_from_text retourne 1 section

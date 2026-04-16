@@ -5,18 +5,28 @@ Table quiz_sessions — Sessions de quiz interactives.
 """
 import uuid
 from sqlalchemy import (
-    Column, String, Integer, Float, Boolean, TIMESTAMP,
-    CheckConstraint, Index, ForeignKey
+    Column,
+    String,
+    Integer,
+    Float,
+    Boolean,
+    CheckConstraint,
+    Index,
+    ForeignKey,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class QuizSession(Base, TimestampMixin):
+class QuizSession(Base):
     __tablename__ = "quiz_sessions"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ─── Identifiants ────────────────────────────────────────────
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

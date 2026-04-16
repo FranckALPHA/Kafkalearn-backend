@@ -4,17 +4,27 @@ models/notification_preference.py
 User notification preferences and quiet hours configuration.
 """
 from sqlalchemy import (
-    Column, String, Integer, Boolean, Time, Index, ForeignKey
+    Column,
+    String,
+    Integer,
+    Boolean,
+    Time,
+    Index,
+    ForeignKey,
+    TIMESTAMP,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class NotificationPreference(Base, TimestampMixin):
+class NotificationPreference(Base):
     __tablename__ = "notification_preferences"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(

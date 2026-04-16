@@ -1,15 +1,26 @@
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy import (
-    Column, String, Text, Integer, Float, Boolean, TIMESTAMP,
-    CheckConstraint, Index, ForeignKey, func
+    Column,
+    String,
+    Text,
+    Integer,
+    Float,
+    Boolean,
+    CheckConstraint,
+    Index,
+    ForeignKey,
+    TIMESTAMP,
+    func
 )
 
 
-class UserDocument(Base, TimestampMixin):
+class UserDocument(Base):
     __tablename__ = "user_documents"
+
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(

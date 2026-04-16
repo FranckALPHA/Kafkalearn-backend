@@ -13,13 +13,17 @@ class JSONValidator:
     }
 
     @classmethod
-    def parse_and_validate(cls, raw_text: str, analysis_type: str) -> Dict[str, Any]:
-        cleaned = re.sub(r"^```(?:json)?\s*", "", raw_text.strip())
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-        try:
-            data = json.loads(cleaned)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"JSON invalide: {e}")
+    def parse_and_validate(cls, raw_text: Any, analysis_type: str) -> Dict[str, Any]:
+        if isinstance(raw_text, dict):
+            data = raw_text
+        else:
+            cleaned = re.sub(r"^```(?:json)?\s*", "", raw_text.strip())
+            cleaned = re.sub(r"\s*```$", "", cleaned)
+            try:
+                data = json.loads(cleaned)
+            except (json.JSONDecodeError, AttributeError) as e:
+                raise ValueError(f"JSON invalide ou type incorrect: {e}")
+
         if not isinstance(data, dict):
             raise ValueError("Le JSON doit être un objet")
         for field in cls.REQUIRED.get(analysis_type, []):

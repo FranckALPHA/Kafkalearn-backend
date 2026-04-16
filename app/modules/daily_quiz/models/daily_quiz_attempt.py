@@ -1,13 +1,29 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, CheckConstraint, Index, UniqueConstraint
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    Boolean,
+    ForeignKey,
+    CheckConstraint,
+    Index,
+    UniqueConstraint,
+    TIMESTAMP,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.modules.users.models.mixins import TimestampMixin
 
 
-class DailyQuizAttempt(Base, TimestampMixin):
+class DailyQuizAttempt(Base):
     __tablename__ = "daily_quiz_attempts"
+
+    created_at = Column(TIMESTAMP, default=func.now(), nullable=False)
+    updated_at = Column(
+        TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(
@@ -57,7 +73,7 @@ class DailyQuizAttempt(Base, TimestampMixin):
             name="ck_daily_quiz_attempts_score_pourcentage",
         ),
         CheckConstraint(
-            "duree_secondes > 0",
+            "duree_secondes IS NULL OR duree_secondes > 0",
             name="ck_daily_quiz_attempts_duree_secondes",
         ),
         UniqueConstraint("user_id", "daily_quiz_id", name="idx_user_quiz_unique"),
@@ -67,6 +83,7 @@ class DailyQuizAttempt(Base, TimestampMixin):
     user = relationship(
         "User",
         back_populates="quiz_attempts",
+        lazy="raise_on_sql",
     )
     quiz = relationship(
         "DailyQuiz",
